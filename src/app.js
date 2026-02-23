@@ -22,6 +22,11 @@ import userRouter from "./routes/user.routes.js";
 //routes declaration
 app.use("/api/v2/users", userRouter);
 
+// Add this temporarily
+app.post("/api/v2/users/test", (req, res) => {
+    res.status(200).json({ message: "Direct POST route is working!" });
+});
+
 //http:localhost:8000/api/v2/users/register
 
 export { app };
