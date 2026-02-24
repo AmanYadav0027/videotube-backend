@@ -4,6 +4,14 @@ import jwt from "jsonwebtoken";
 import { User } from "../models/user.models.js";
 
 export const verifyJWT = asyncHandler(async (req, _, next) => {
+    // 1. Receive: Try to find the Access Token inside the user's cookies OR inside their request headers.
+    // 2. Validate: If no token is found, throw a 401 Unauthorized error (stop the request entirely).
+    // 3. Process: Use our secret key to decode the token. This reveals the payload (which contains the user's ID).
+    // 4. Database: Find the user in the database using that decoded ID, making sure to strip out the password and refresh token.
+    // 5. Validate: If the user doesn't exist in the database anymore (maybe they were deleted), throw an error.
+    // 6. Magic Step: Attach this clean user data directly to the request object (req.user = user).
+    // 7. Proceed: Call next() to tell Express "This person is legit, move on to the actual controller!"
+
     try {
         const token =
             req.cookies?.accessToken ||
