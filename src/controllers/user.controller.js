@@ -297,7 +297,7 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, {}, "Password changed successfully"));
 });
 
-const getCurentUser = asyncHandler(async (req, res) => {
+const getCurrentUser = asyncHandler(async (req, res) => {
     // 1. Receive: Get the user details that the Auth Middleware already attached to the request (req.user).
     // 2. Respond: Send a 200 Success status returning that exact user data.
 
@@ -494,6 +494,63 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         );
 });
 
+const getWatchHistory = asyncHandler(async (req, res) => {
+    // imp for interviews
+    // que //what does you get from the req.user._id
+    //ans //u get a mongodb string which mongeoose automatically converts it into object id when using operation like find etc
+    const user = await User.aggregate([
+        {
+            $match: {
+                _id: new mongoose.Types.ObjectId(req.user._id),
+            },
+        },
+        {
+            $lookup: {
+                from: "videos",
+                localField: "watchHistory",
+                foreignField: "_id",
+                as: "watchHistory",
+                pipeline: [
+                    {
+                        $lookup: {
+                            from: "users",
+                            localField: "owner",
+                            foreignField: "_id",
+                            as: "owner",
+                            pipeline: [
+                                {
+                                    $project: {
+                                        fullName: 1,
+                                        username: 1,
+                                        avatar: 1,
+                                    },
+                                },
+                            ],
+                        },
+                    },
+                    {
+                        $addFields: {
+                            owner: {
+                                $first: "$owner",
+                            },
+                        },
+                    },
+                ],
+            },
+        },
+    ]);
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                user[0].watchHistory,
+                "Watch history fetched successfully"
+            )
+        );
+});
+
 export {
     registerUser,
     loginUser,
@@ -505,4 +562,5 @@ export {
     updateUserAvatar,
     updateUserCoverImage,
     getUserChannelProfile,
+    getWatchHistory,
 };
