@@ -18,14 +18,11 @@ app.use(cookieParser());
 
 //routes import
 import userRouter from "./routes/user.routes.js";
+import videoRouter from "./routes/video.routes.js";
 
 //routes declaration
 app.use("/api/v2/users", userRouter);
-
-// Add this temporarily
-app.post("/api/v2/users/test", (req, res) => {
-    res.status(200).json({ message: "Direct POST route is working!" });
-});
+app.use("/api/v2/videos", videoRouter);
 
 //http:localhost:8000/api/v2/users/register
 
