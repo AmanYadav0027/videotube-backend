@@ -7,6 +7,8 @@ import {
 import { Video } from "../models/video.models.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import mongoose, { isValidObjectId } from "mongoose";
+import fs from "fs";
+import { generateFileHash } from "../utils/fileHash.js";
 
 const publishAVideo = asyncHandler(async (req, res) => {
     // grab title and description from req.body
@@ -20,7 +22,7 @@ const publishAVideo = asyncHandler(async (req, res) => {
     const { title, description } = req.body;
 
     if ([title, description].some((field) => field?.trim() === "")) {
-        throw new ApiError(400, "All fields are required");
+        throw new ApiError(400, "VideoFile and Thumbnail are required");
     }
 
     const videoFileLocalPath = req.files?.videoFile?.[0]?.path;
@@ -28,7 +30,24 @@ const publishAVideo = asyncHandler(async (req, res) => {
     const thumbnailLocalPath = req.files?.thumbnail?.[0]?.path;
 
     if (!(videoFileLocalPath && thumbnailLocalPath)) {
-        throw new ApiError(400, "VideoFile or Thumbnail is missing");
+        throw new ApiError(400, "VideoFile and Thumbnail are required");
+    }
+
+    // FILE HASHING
+    const fileFingerPrint = await generateFileHash(videoFileLocalPath);
+
+    const existingVideoFile = await Video.findOne({
+        fileHash: fileFingerPrint,
+    });
+
+    if (existingVideoFile) {
+        fs.unlinkSync(videoFileLocalPath);
+        fs.unlinkSync(thumbnailLocalPath);
+
+        throw new ApiError(
+            409,
+            "This Exact video file has already been uploaded to the server."
+        );
     }
 
     const videoFile = await uploadOnCloudinary(videoFileLocalPath);
@@ -46,6 +65,7 @@ const publishAVideo = asyncHandler(async (req, res) => {
         description,
         duration: videoFile.duration,
         owner: req.user._id,
+        fileHash: fileFingerPrint,
     });
 
     if (!video) {
@@ -76,7 +96,7 @@ const getVideoById = asyncHandler(async (req, res) => {
     const video = await Video.aggregate([
         {
             $match: {
-                _id: new mongoose.Types.ObjectId(req.video._id),
+                _id: new mongoose.Types.ObjectId(videoId),
             },
         },
         {
@@ -160,7 +180,7 @@ const updateVideo = asyncHandler(async (req, res) => {
         }
     }
 
-    const updatedVideo = await findByIdAndUpdate(
+    const updatedVideo = await Video.findByIdAndUpdate(
         videoId,
         {
             $set: updateData,
