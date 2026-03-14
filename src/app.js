@@ -21,12 +21,14 @@ import userRouter from "./routes/user.routes.js";
 import videoRouter from "./routes/video.routes.js";
 import playlistRouter from "./routes/playlist.routes.js";
 import subscriptionRouter from "./routes/subscription.routes.js";
+import tweetRouter from "./routes/tweet.routes.js";
 
 //routes declaration
 app.use("/api/v2/users", userRouter);
 app.use("/api/v2/videos", videoRouter);
 app.use("/api/v2/playlist", playlistRouter);
 app.use("/api/v2/subscription", subscriptionRouter);
+app.use("/api/v2/tweet", tweetRouter);
 
 //http:localhost:8000/api/v2/users/register
 

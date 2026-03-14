@@ -202,7 +202,7 @@ const deletePlaylist = asyncHandler(async (req, res) => {
     const { playlistId } = req.params;
 
     if (!isValidObjectId(playlistId)) {
-        throw new ApiError(400, "Invalid userId");
+        throw new ApiError(400, "Invalid playlistId");
     }
 
     const playlist = await Playlist.findById(playlistId);
@@ -218,11 +218,11 @@ const deletePlaylist = asyncHandler(async (req, res) => {
         );
     }
 
-    await Playlist.deleteOne();
+    await playlist.deleteOne();
 
     return res
         .status(200)
-        .json(new ApiResponse(200, "Playlist Deleted successfully"));
+        .json(new ApiResponse(200, {}, "Playlist Deleted successfully"));
 });
 
 const updatePlaylist = asyncHandler(async (req, res) => {
