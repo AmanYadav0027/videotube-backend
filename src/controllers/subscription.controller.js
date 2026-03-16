@@ -14,7 +14,7 @@ const toggleSubscription = asyncHandler(async (req, res) => {
     const { channelId } = req.params;
 
     if (!isValidObjectId(channelId)) {
-        throw new ApiError(400, "Invaliid Channel Id");
+        throw new ApiError(400, "Invalid Channel Id");
     }
 
     if (channelId === req.user?._id.toString()) {
@@ -43,10 +43,10 @@ const toggleSubscription = asyncHandler(async (req, res) => {
             channel: channelId,
         });
         return res
-            .status(200)
+            .status(201)
             .json(
                 new ApiResponse(
-                    200,
+                    201,
                     { subscribed: true },
                     "Subscribed successfully"
                 )
