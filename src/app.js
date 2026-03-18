@@ -30,13 +30,13 @@ import dashboardRouter from "./routes/dashboard.routes.js";
 //routes declaration
 app.use("/api/v2/users", userRouter);
 app.use("/api/v2/videos", videoRouter);
-app.use("/api/v2/playlist", playlistRouter);
-app.use("/api/v2/subscription", subscriptionRouter);
-app.use("/api/v2/tweet", tweetRouter);
-app.use("/api/v2/like", likeRouter);
-app.use("/api/v2/comment", commentRouter);
-app.use("/api/v2/healthcheck", healthcheckRouter);
-app.use("/api/v2/dashboard", dashboardRouter);
+app.use("/api/v2/playlists", playlistRouter);
+app.use("/api/v2/subscriptions", subscriptionRouter);
+app.use("/api/v2/tweets", tweetRouter);
+app.use("/api/v2/likes", likeRouter);
+app.use("/api/v2/comments", commentRouter);
+app.use("/api/v2/healthchecks", healthcheckRouter);
+app.use("/api/v2/dashboards", dashboardRouter);
 
 //http:localhost:8000/api/v2/users/register
 
