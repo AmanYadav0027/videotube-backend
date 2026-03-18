@@ -1,8 +1,8 @@
-import { ApiError } from "../utils/ApiError";
-import { asyncHandler } from "../utils/asyncHandler";
-import { Tweet } from "../models/tweet.model";
+import { ApiError } from "../utils/ApiError.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { Tweet } from "../models/tweet.model.js";
 import { isValidObjectId } from "mongoose";
-import { ApiResponse } from "../utils/ApiResponse";
+import { ApiResponse } from "../utils/ApiResponse.js";
 
 const createTweet = asyncHandler(async (req, res) => {
     // extract content from req.body

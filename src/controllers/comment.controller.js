@@ -2,7 +2,6 @@ import { isValidObjectId } from "mongoose";
 import { asyncHandler } from "../utils/asyncHandler";
 import { ApiResponse } from "../utils/ApiResponse";
 import { ApiError } from "../utils/ApiError";
-import mongooseAggregatePaginate from "mongoose-aggregate-paginate-v2";
 
 const addComment = asyncHandler(async (req, res) => {
     //extract videoId from params and validate
