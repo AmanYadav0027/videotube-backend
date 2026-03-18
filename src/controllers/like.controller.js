@@ -1,8 +1,9 @@
 import { isValidObjectId } from "mongoose";
-import { asyncHandler } from "../utils/asyncHandler";
-import { Like } from "../models/like.models";
-import { ApiResponse } from "../utils/ApiResponse";
-import { ApiError } from "../utils/ApiError";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import { Like } from "../models/like.models.js";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { ApiError } from "../utils/ApiError.js";
+import mongoose from "mongoose";
 
 const toggleVideoLike = asyncHandler(async (req, res) => {
     //get videoId from params and validate

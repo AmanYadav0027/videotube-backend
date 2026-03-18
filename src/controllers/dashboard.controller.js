@@ -1,5 +1,9 @@
-import { ApiResponse } from "../utils/ApiResponse";
-import { asyncHandler } from "../utils/asyncHandler";
+import { ApiResponse } from "../utils/ApiResponse.js";
+import { asyncHandler } from "../utils/asyncHandler.js";
+import mongoose from "mongoose";
+import { Subscription } from "../models/subscription.models.js";
+import { Video } from "../models/video.models.js";
+import { Like } from "../models/like.models.js";
 
 const getChannelStats = asyncHandler(async (req, res) => {
     //get channelid from req.user?._id
@@ -29,7 +33,7 @@ const getChannelStats = asyncHandler(async (req, res) => {
         {
             $group: {
                 _id: req.user?._id,
-                $sum: "$views",
+                totalViews: { $sum: "$views" },
             },
         },
     ]);
