@@ -1,0 +1,113 @@
+import { ApiResponse } from "../utils/ApiResponse";
+import { asyncHandler } from "../utils/asyncHandler";
+
+const getChannelStats = asyncHandler(async (req, res) => {
+    //get channelid from req.user?._id
+    //wrap these in Promise.all() so they run concurrently
+    //count documents in subscription where channel matches the user
+    //count docu,ents in video where the owner matches the user
+    //aggregate video to sum up the views
+    //aggregate like (joining the video) to count total likes
+    //return success
+
+    const userId = new mongoose.Types.ObjectId(req.user?._id);
+
+    const totalSubscribersPromise = Subscription.countDocuments({
+        channel: req.user?._id,
+    });
+
+    const totalVideosPromise = Video.countDocuments({
+        owner: req.user?._id,
+    });
+
+    const totalViewsPromise = Video.aggregate([
+        {
+            $match: {
+                owner: new mongoose.Types.ObjectId(req.user?._id),
+            },
+        },
+        {
+            $group: {
+                _id: req.user?._id,
+                $sum: "$views",
+            },
+        },
+    ]);
+
+    const totalLikesPromise = Like.aggregate([
+        {
+            $match: {
+                owner: userId,
+            },
+        },
+        {
+            $lookup: {
+                from: "likes",
+                localField: "_id",
+                foreignField: "video",
+                as: "videoLikes",
+            },
+        },
+        {
+            $project: {
+                totalLikesOnVideo: {
+                    $size: "$videoLikes",
+                },
+            },
+        },
+        {
+            $group: {
+                _id: null,
+                totalChannellikes: {
+                    $sum: "$totalLikesOnVideo",
+                },
+            },
+        },
+    ]);
+
+    const [totalSubscribers, totalVideos, totalViewsArr, totalLikesArr] =
+        await Promise.all([
+            totalSubscribersPromise,
+            totalVideosPromise,
+            totalViewsPromise,
+            totalLikesPromise,
+        ]);
+
+    const stats = {
+        totalSubscribers,
+        totalVideos,
+        totalViews: totalViewsArr[0]?.totalViews || 0,
+        totalLikes: totalLikesArr[0]?.totalChannelLikes || 0,
+    };
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(200, stats, "channel stats fetched successfully")
+        );
+});
+
+const getChannelVideos = asyncHandler(async (req, res) => {
+    //get userId = new mongoose.Types.ObjectId(req.user?._id)
+    // get videos from .find method
+    //chain .sort to the end of the find query so the creator's newest videos shows up at the top
+    //return success
+
+    const userId = new mongoose.Types.ObjectId(req.user?._id);
+
+    const allVideos = await Video.find({
+        owner: userId,
+    }).sort({ createdAt: -1 });
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                allVideos,
+                "All videos from the channel fetched successfully"
+            )
+        );
+});
+
+export { getChannelStats, getChannelVideos };
