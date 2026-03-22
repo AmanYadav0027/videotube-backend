@@ -81,12 +81,6 @@ const publishAVideo = asyncHandler(async (req, res) => {
 });
 
 const getVideoById = asyncHandler(async (req, res) => {
-    //grab video id from req.params
-    //check if its object id valid
-    //find the video using findById()
-    // check if the video exist
-    //return success
-
     const { videoId } = req.params;
 
     if (!isValidObjectId(videoId)) {
@@ -94,11 +88,13 @@ const getVideoById = asyncHandler(async (req, res) => {
     }
 
     const video = await Video.aggregate([
+        // Stage 1: find the video
         {
             $match: {
                 _id: new mongoose.Types.ObjectId(videoId),
             },
         },
+        // Stage 2: join owner from users collection
         {
             $lookup: {
                 from: "users",
@@ -107,6 +103,20 @@ const getVideoById = asyncHandler(async (req, res) => {
                 as: "owner",
             },
         },
+        // Stage 3: $unwind converts owner from [{...}] to {...}
+        {
+            $unwind: "$owner",
+        },
+        // Stage 4: join likes to count them
+        {
+            $lookup: {
+                from: "likes",
+                localField: "_id",
+                foreignField: "video",
+                as: "likes",
+            },
+        },
+        // Stage 5: project only what frontend needs
         {
             $project: {
                 videoFile: 1,
@@ -115,11 +125,12 @@ const getVideoById = asyncHandler(async (req, res) => {
                 description: 1,
                 duration: 1,
                 views: 1,
-                owner: {
-                    username: { $arrayElemAt: ["$owner.username", 0] },
-                    fullName: { $arrayElemAt: ["$owner.fullName", 0] },
-                    avatar: { $arrayElemAt: ["$owner.avatar", 0] },
-                },
+                createdAt: 1,
+                likesCount: { $size: "$likes" },
+                "owner._id": 1,
+                "owner.username": 1,
+                "owner.fullName": 1,
+                "owner.avatar": 1,
             },
         },
     ]);
@@ -127,6 +138,8 @@ const getVideoById = asyncHandler(async (req, res) => {
     if (!video?.length) {
         throw new ApiError(404, "video not found");
     }
+
+    await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
 
     return res
         .status(200)
@@ -265,9 +278,38 @@ const getAllVideos = asyncHandler(async (req, res) => {
         sortOptions.createdAt = -1;
     }
 
+    // Replace this block in getAllVideos
     const videoAggregate = Video.aggregate([
         {
             $match: matchCondition,
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner",
+            },
+        },
+        {
+            // $lookup returns an array. $unwind turns it back into a single object.
+            $unwind: "$owner",
+        },
+        {
+            // Security Check: Only send the specific owner data the frontend needs!
+            $project: {
+                videoFile: 1,
+                thumbnail: 1,
+                title: 1,
+                description: 1,
+                duration: 1,
+                views: 1,
+                isPublished: 1,
+                createdAt: 1,
+                "owner._id": 1,
+                "owner.username": 1,
+                "owner.avatar": 1,
+            },
         },
         {
             $sort: sortOptions,
@@ -314,6 +356,18 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, video, "status was toggled successfully"));
 });
 
+const incrementVideoViews = asyncHandler(async (req, res) => {
+    const { videoId } = req.params;
+
+    if (!isValidObjectId(videoId)) {
+        throw new ApiError(400, "Invalid videoId");
+    }
+
+    await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
+
+    return res.status(200).json(new ApiResponse(200, {}, "View counted"));
+});
+
 export {
     publishAVideo,
     getVideoById,
@@ -321,4 +375,5 @@ export {
     deleteVideo,
     getAllVideos,
     togglePublishStatus,
+    incrementVideoViews,
 };
