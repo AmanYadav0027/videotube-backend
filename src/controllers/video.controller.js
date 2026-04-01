@@ -5,6 +5,7 @@ import {
     uploadOnCloudinary,
 } from "../utils/cloudinary.js";
 import { Video } from "../models/video.models.js";
+import { User } from "../models/user.models.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import mongoose, { isValidObjectId } from "mongoose";
 import fs from "fs";
@@ -140,6 +141,12 @@ const getVideoById = asyncHandler(async (req, res) => {
     }
 
     await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
+
+    if (req.user?._id) {
+        await User.findByIdAndUpdate(req.user._id, {
+            $addToSet: { watchHistory: videoId },
+        });
+    }
 
     return res
         .status(200)

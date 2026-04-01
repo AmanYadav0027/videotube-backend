@@ -3,6 +3,7 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { Tweet } from "../models/tweet.model.js";
 import { isValidObjectId } from "mongoose";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import mongoose from "mongoose";
 
 const createTweet = asyncHandler(async (req, res) => {
     // extract content from req.body
@@ -44,13 +45,69 @@ const getUserTweets = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid UserId");
     }
 
-    const allTweets = await Tweet.find({
-        owner: userId,
-    }).populate("owner", "fullName avatar");
+    const allTweets = await Tweet.aggregate([
+        {
+            $match: {
+                owner: new mongoose.Types.ObjectId(userId),
+            },
+        },
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "ownerDetails",
+            },
+        },
+        {
+            $unwind: {
+                path: "$ownerDetails",
+            },
+        },
+        {
+            $lookup: {
+                from: "likes",
+                localField: "_id",
+                foreignField: "tweet",
+                as: "likeDetails",
+            },
+        },
+        {
+            $addFields: {
+                likesCount: { $size: "$likeDetails" },
 
-    if (!allTweets.length) {
-        throw new ApiError(404, "Tweets not found");
-    }
+                isLiked: {
+                    $cond: {
+                        if: {
+                            $in: [req.user?._id, "$likeDetails.likedBy"],
+                        },
+                        then: true,
+                        else: false,
+                    },
+                },
+            },
+        },
+
+        {
+            $project: {
+                content: 1,
+                createdAt: 1,
+                likesCount: 1,
+                isLiked: 1,
+                owner: {
+                    _id: "$ownerDetails._id",
+                    username: "$ownerDetails.username",
+                    fullName: "$ownerDetails.fullName",
+                    avatar: "$ownerDetails.avatar",
+                },
+            },
+        },
+        {
+            $sort: {
+                createdAt: -1, // Newest tweets first!
+            },
+        },
+    ]);
 
     return res
         .status(200)

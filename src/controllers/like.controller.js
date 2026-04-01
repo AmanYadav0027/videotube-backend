@@ -170,20 +170,46 @@ const getLikedVideos = asyncHandler(async (req, res) => {
             },
         },
         {
-            $unwind: "$videoDetails",
+            $unwind: {
+                path: "$videoDetails",
+                preserveNullAndEmptyArrays: false,
+            },
         },
-
+        {
+            $lookup: {
+                from: "users",
+                localField: "videoDetails.owner",
+                foreignField: "_id",
+                as: "ownerDetails",
+            },
+        },
+        {
+            $unwind: {
+                path: "$ownerDetails",
+                preserveNullAndEmptyArrays: true,
+            },
+        },
         {
             $project: {
-                _id: 0,
-                video: {
-                    _id: "$videoDetails._id",
-                    title: "$videoDetails.title",
-                    description: "$videoDetails.description",
-                    thumbnail: "$videoDetails.thumbnail",
-                    views: "$videoDetails.views",
-                    duration: "$videoDetails.duration",
-                    owner: "$videoDetails.owner",
+                _id: "$videoDetails._id",
+                title: "$videoDetails.title",
+                description: "$videoDetails.description",
+                thumbnail: "$videoDetails.thumbnail",
+                views: "$videoDetails.views",
+                duration: "$videoDetails.duration",
+                createdAt: "$videoDetails.createdAt",
+
+                // Use $ifNull to safely return the value, or null if it doesn't exist
+                // This stops MongoDB from returning literal string names!
+                owner: {
+                    _id: { $ifNull: ["$ownerDetails._id", null] },
+                    username: {
+                        $ifNull: ["$ownerDetails.username", "Unknown User"],
+                    },
+                    fullName: {
+                        $ifNull: ["$ownerDetails.fullName", "Unknown User"],
+                    },
+                    avatar: { $ifNull: ["$ownerDetails.avatar", ""] },
                 },
             },
         },
