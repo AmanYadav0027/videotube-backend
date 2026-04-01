@@ -38,35 +38,23 @@ const getChannelStats = asyncHandler(async (req, res) => {
         },
     ]);
 
+    // replace the totalLikesPromise with:
     const totalLikesPromise = Like.aggregate([
         {
-            $match: {
-                owner: userId,
-            },
-        },
-        {
             $lookup: {
-                from: "likes",
-                localField: "_id",
-                foreignField: "video",
-                as: "videoLikes",
+                from: "videos",
+                localField: "video",
+                foreignField: "_id",
+                as: "videoData",
             },
         },
+        { $unwind: "$videoData" },
         {
-            $project: {
-                totalLikesOnVideo: {
-                    $size: "$videoLikes",
-                },
+            $match: {
+                "videoData.owner": userId,
             },
         },
-        {
-            $group: {
-                _id: null,
-                totalChannellikes: {
-                    $sum: "$totalLikesOnVideo",
-                },
-            },
-        },
+        { $count: "totalLikes" },
     ]);
 
     const [totalSubscribers, totalVideos, totalViewsArr, totalLikesArr] =
@@ -81,7 +69,7 @@ const getChannelStats = asyncHandler(async (req, res) => {
         totalSubscribers,
         totalVideos,
         totalViews: totalViewsArr[0]?.totalViews || 0,
-        totalLikes: totalLikesArr[0]?.totalChannelLikes || 0,
+        totalLikes: totalLikesArr[0]?.totalLikes || 0,
     };
 
     return res
