@@ -159,4 +159,37 @@ const getVideoComments = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, comments, "Comments fetched successfully"));
 });
 
-export { addComment, updateComment, deleteComment, getVideoComments };
+const addTweetComment = asyncHandler(async (req, res) => {
+    const { tweetId } = req.params;
+    const { content } = req.body;
+
+    if (!isValidObjectId(tweetId)) {
+        throw new ApiError(400, "Invalid tweetId");
+    }
+
+    if (!content || content.trim() === "") {
+        throw new ApiError(400, "Comment content is required");
+    }
+
+    const comment = await Comment.create({
+        content,
+        tweet: tweetId,
+        owner: req.user?._id,
+    });
+
+    if (!comment) {
+        throw new ApiError(500, "Failed to add comment");
+    }
+
+    return res
+        .status(201)
+        .json(new ApiResponse(201, comment, "Comment added successfully"));
+});
+
+export {
+    addComment,
+    updateComment,
+    deleteComment,
+    getVideoComments,
+    addTweetComment,
+};

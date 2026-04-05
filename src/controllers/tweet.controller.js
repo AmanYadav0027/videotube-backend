@@ -73,6 +73,22 @@ const getUserTweets = asyncHandler(async (req, res) => {
             },
         },
         {
+            $lookup: {
+                from: "comments",
+                localField: "_id",
+                foreignField: "tweet",
+                as: "commentDetails",
+            },
+        },
+        {
+            $lookup: {
+                from: "tweets",
+                localField: "_id",
+                foreignField: "originalTweet",
+                as: "retweetDetails",
+            },
+        },
+        {
             $addFields: {
                 likesCount: { $size: "$likeDetails" },
 
@@ -188,4 +204,44 @@ const deleteTweet = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, {}, "Tweet deleted successfully"));
 });
 
-export { createTweet, getUserTweets, updateTweet, deleteTweet };
+const toggleRetweet = asyncHandler(async (req, res) => {
+    const { tweetId } = req.params;
+
+    if (!isValidObjectId(tweetId)) {
+        throw new ApiError(400, "Invalid tweetId");
+    }
+
+    // Check if the user has already retweeted this specific tweet
+    const existingRetweet = await Tweet.findOne({
+        owner: req.user?._id,
+        originalTweet: tweetId,
+    });
+
+    if (existingRetweet) {
+        // Un-retweet: delete the retweet document
+        await existingRetweet.deleteOne();
+        return res
+            .status(200)
+            .json(
+                new ApiResponse(200, { retweeted: false }, "Retweet removed")
+            );
+    } else {
+        // Retweet: create a new tweet document that points to the original
+        await Tweet.create({
+            owner: req.user?._id,
+            originalTweet: tweetId,
+        });
+
+        return res
+            .status(201)
+            .json(
+                new ApiResponse(
+                    201,
+                    { retweeted: true },
+                    "Retweeted successfully"
+                )
+            );
+    }
+});
+
+export { createTweet, getUserTweets, updateTweet, deleteTweet, toggleRetweet };

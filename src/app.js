@@ -40,4 +40,14 @@ app.use("/api/v2/dashboards", dashboardRouter);
 
 //http:localhost:8000/api/v2/users/register
 
+app.use((err, req, res, next) => {
+    const statusCode = err.statusCode || 500;
+
+    return res.status(statusCode).json({
+        success: false,
+        message: err.message,
+        errors: err.errors || [],
+    });
+});
+
 export { app };
