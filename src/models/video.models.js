@@ -39,6 +39,20 @@ const videoSchema = new Schema(
             type: String,
             required: true,
         },
+        aiSummary: {
+            type: String,
+        },
+        aiChapters: [
+            {
+                time: { type: String, required: true },
+                title: { type: String, required: true },
+            },
+        ],
+        aiStatus: {
+            type: String,
+            enum: ["PENDING", "PROCESSING", "COMPLETED", "FAILED"],
+            default: "PENDING",
+        },
     },
     { timestamps: true }
 );

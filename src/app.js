@@ -26,6 +26,7 @@ import likeRouter from "./routes/like.routes.js";
 import commentRouter from "./routes/comment.routes.js";
 import healthcheckRouter from "./routes/healthcheck.routes.js";
 import dashboardRouter from "./routes/dashboard.routes.js";
+import webhookRouter from "./routes/webhook.routes.js";
 
 //routes declaration
 app.use("/api/v2/users", userRouter);
@@ -37,6 +38,7 @@ app.use("/api/v2/likes", likeRouter);
 app.use("/api/v2/comments", commentRouter);
 app.use("/api/v2/healthchecks", healthcheckRouter);
 app.use("/api/v2/dashboards", dashboardRouter);
+app.use("/api/v2/webhooks", webhookRouter);
 
 //http:localhost:8000/api/v2/users/register
 

@@ -10,6 +10,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import mongoose, { isValidObjectId } from "mongoose";
 import fs from "fs";
 import { generateFileHash } from "../utils/fileHash.js";
+import { triggerTranscription } from "../utils/aiHelper.js";
 
 const publishAVideo = asyncHandler(async (req, res) => {
     // grab title and description from req.body
@@ -76,9 +77,17 @@ const publishAVideo = asyncHandler(async (req, res) => {
         );
     }
 
+    triggerTranscription(video.videoFile, video._id);
+
     return res
         .status(201)
-        .json(new ApiResponse(200, video, "video published successfully"));
+        .json(
+            new ApiResponse(
+                200,
+                video,
+                "video published successfully. AI processing started."
+            )
+        );
 });
 
 const getVideoById = asyncHandler(async (req, res) => {
@@ -132,6 +141,9 @@ const getVideoById = asyncHandler(async (req, res) => {
                 "owner.username": 1,
                 "owner.fullName": 1,
                 "owner.avatar": 1,
+                aiStatus: 1,
+                aiSummary: 1,
+                aiChapters: 1,
             },
         },
     ]);
