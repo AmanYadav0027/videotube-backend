@@ -8,7 +8,10 @@ import {
     deleteVideo,
     incrementVideoViews,
 } from "../controllers/video.controller.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import {
+    verifyJWT,
+    optionalVerifyJWT,
+} from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
 
 const router = Router();
@@ -39,6 +42,6 @@ router
 
 router.route("/toggle/publish/:videoId").patch(togglePublishStatus);
 
-router.route("/:videoId/view").post(incrementVideoViews);
+router.post("/:videoId/view", optionalVerifyJWT, incrementVideoViews);
 
 export default router;

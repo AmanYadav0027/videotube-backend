@@ -11,6 +11,7 @@ import mongoose, { isValidObjectId } from "mongoose";
 import fs from "fs";
 import { generateFileHash } from "../utils/fileHash.js";
 import { triggerTranscription } from "../utils/aiHelper.js";
+import { TranscriptChunk } from "../models/transcriptChunk.models.js";
 
 const publishAVideo = asyncHandler(async (req, res) => {
     // grab title and description from req.body
@@ -152,14 +153,6 @@ const getVideoById = asyncHandler(async (req, res) => {
         throw new ApiError(404, "video not found");
     }
 
-    await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
-
-    if (req.user?._id) {
-        await User.findByIdAndUpdate(req.user._id, {
-            $addToSet: { watchHistory: videoId },
-        });
-    }
-
     return res
         .status(200)
         .json(new ApiResponse(200, video, "video found successfully"));
@@ -259,6 +252,7 @@ const deleteVideo = asyncHandler(async (req, res) => {
     await deleteFromCloudinary(video.videoFile, "video");
 
     await Video.findByIdAndDelete(videoId);
+    await TranscriptChunk.deleteMany({ videoId });
 
     return res
         .status(200)
@@ -375,17 +369,32 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
         .json(new ApiResponse(200, video, "status was toggled successfully"));
 });
 
-const incrementVideoViews = asyncHandler(async (req, res) => {
-    const { videoId } = req.params;
+const recentViews = new Set(); // module-level, lives for server lifetime
 
-    if (!isValidObjectId(videoId)) {
-        throw new ApiError(400, "Invalid videoId");
+const incrementVideoViews = async (req, res) => {
+    const { videoId } = req.params;
+    const clientKey = `${req.ip}_${videoId}`;
+
+    if (recentViews.has(clientKey)) {
+        return res
+            .status(200)
+            .json({ success: true, message: "View already counted." });
     }
+
+    recentViews.add(clientKey);
+    setTimeout(() => recentViews.delete(clientKey), 30 * 60 * 1000);
 
     await Video.findByIdAndUpdate(videoId, { $inc: { views: 1 } });
 
-    return res.status(200).json(new ApiResponse(200, {}, "View counted"));
-});
+    // Move watch history here — runs once, deduplicated
+    if (req.user?._id) {
+        await User.findByIdAndUpdate(req.user._id, {
+            $addToSet: { watchHistory: videoId },
+        });
+    }
+
+    return res.status(200).json({ success: true });
+};
 
 export {
     publishAVideo,

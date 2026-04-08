@@ -37,3 +37,19 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
         throw new ApiError(401, error?.message || "Invalid access Token");
     }
 });
+
+export const optionalVerifyJWT = async (req, res, next) => {
+    try {
+        const token =
+            req.cookies?.accessToken ||
+            req.header("Authorization")?.replace("Bearer ", "");
+        if (!token) return next(); // no token — just continue without req.user
+        const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
+        req.user = await User.findById(decodedToken?._id).select(
+            "-password -refreshToken"
+        );
+    } catch {
+        // invalid token — just continue without req.user
+    }
+    next();
+};
