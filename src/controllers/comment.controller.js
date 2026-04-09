@@ -4,23 +4,15 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import { Comment } from "../models/comment.models.js";
 import mongoose from "mongoose";
+import { classifyComment } from "../utils/moderationService.js";
 
 const addComment = asyncHandler(async (req, res) => {
-    //extract videoId from params and validate
-    //get content from body and check if is ti empty or not
-    //create a comment using create method
-    //give error if the method fails to create the comment
-    //return success
-
     const { videoId } = req.params;
-    if (!isValidObjectId(videoId)) {
-        throw new ApiError(400, "Invalid VideoId");
-    }
+    if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid VideoId");
 
     const { content } = req.body;
-    if (!content || content.trim() === "") {
+    if (!content || content.trim() === "")
         throw new ApiError(400, "Content is required");
-    }
 
     const comment = await Comment.create({
         video: videoId,
@@ -28,98 +20,92 @@ const addComment = asyncHandler(async (req, res) => {
         owner: req.user?._id,
     });
 
-    if (!comment) {
-        throw new ApiError(500, "failed to create a comment");
-    }
+    if (!comment) throw new ApiError(500, "failed to create a comment");
 
-    return res
-        .status(201)
-        .json(new ApiResponse(201, comment, "Comment created successfully"));
+    // Fire-and-forget moderation — response already sent, runs in background
+    res.status(201).json(
+        new ApiResponse(201, comment, "Comment created successfully")
+    );
+
+    classifyComment(content)
+        .then(async ({ toxic }) => {
+            if (toxic) {
+                await Comment.findByIdAndUpdate(comment._id, {
+                    isFlagged: true,
+                });
+                console.log(
+                    `[moderation][comment:${comment._id}] Flagged as toxic.`
+                );
+            }
+        })
+        .catch((err) => {
+            console.error(
+                `[moderation][comment:${comment._id}] Moderation error.`,
+                { error: err.message }
+            );
+        });
 });
 
 const updateComment = asyncHandler(async (req, res) => {
-    //get commentId from params and validate
-    //get content from body and check for empty string
-    //check if the owner of the comment is the making changes
-    //use findOneandupdate to update the content
-    //return success
-
     const { commentId } = req.params;
-    if (!isValidObjectId(commentId)) {
+    if (!isValidObjectId(commentId))
         throw new ApiError(400, "Invalid CommentId");
-    }
 
     const { content } = req.body;
-    if (!content || content.trim() === "") {
+    if (!content || content.trim() === "")
         throw new ApiError(400, "Content is required");
-    }
 
     const comment = await Comment.findById(commentId);
-
-    if (!comment) {
-        throw new ApiError(404, "Comment doesn't exist");
-    }
-
-    if (comment.owner.toString() !== req.user?._id.toString()) {
+    if (!comment) throw new ApiError(404, "Comment doesn't exist");
+    if (comment.owner.toString() !== req.user?._id.toString())
         throw new ApiError(
             403,
             "You do not have permission to modify this comment"
         );
-    }
 
     comment.content = content;
+    comment.isFlagged = false; // reset flag on edit — re-moderate below
     const updatedComment = await comment.save();
 
-    return res
-        .status(200)
-        .json(
-            new ApiResponse(200, updatedComment, "Comment updated successfully")
-        );
+    res.status(200).json(
+        new ApiResponse(200, updatedComment, "Comment updated successfully")
+    );
+
+    // Re-moderate edited comment
+    classifyComment(content)
+        .then(async ({ toxic }) => {
+            if (toxic) {
+                await Comment.findByIdAndUpdate(commentId, { isFlagged: true });
+                console.log(
+                    `[moderation][comment:${commentId}] Re-flagged after edit.`
+                );
+            }
+        })
+        .catch(() => {});
 });
 
 const deleteComment = asyncHandler(async (req, res) => {
-    //get commentId from params and validate
-    //check if the owner is deleting the comment
-    //delete using deleteOne
-    //return success
-
     const { commentId } = req.params;
-    if (!isValidObjectId(commentId)) {
+    if (!isValidObjectId(commentId))
         throw new ApiError(400, "Invalid CommentId");
-    }
 
     const comment = await Comment.findById(commentId);
-    if (!comment) {
-        throw new ApiError(404, "comment Doesn't Exist");
-    }
-
-    if (comment.owner.toString() !== req.user?._id.toString()) {
+    if (!comment) throw new ApiError(404, "comment Doesn't Exist");
+    if (comment.owner.toString() !== req.user?._id.toString())
         throw new ApiError(
             403,
             "You do not have permission to delete this comment"
         );
-    }
 
     await comment.deleteOne();
-
     return res
         .status(200)
         .json(new ApiResponse(200, {}, "Comment deleted successfully"));
 });
 
 const getVideoComments = asyncHandler(async (req, res) => {
-    //get page=1, limit=10, query, sortBy, sortType, from req.query
-    //get videoId from params validate the videoId
-    //use parseInt to convert page and limit into numbers
-    //use $match sortby and sorttype to filter data
-    //create options object
-    //execuet the aggregate-pagginate
-    //return success
-
     const { videoId } = req.params;
-    if (!isValidObjectId(videoId)) {
-        throw new ApiError(400, "Invalid videoId");
-    }
+    if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid videoId");
 
     const { page = 1, limit = 1 } = req.query;
 
@@ -127,13 +113,10 @@ const getVideoComments = asyncHandler(async (req, res) => {
         {
             $match: {
                 video: new mongoose.Types.ObjectId(videoId),
+                isFlagged: { $ne: true }, // ← exclude flagged comments
             },
         },
-        {
-            $sort: {
-                createdAt: -1,
-            },
-        },
+        { $sort: { createdAt: -1 } },
         {
             $lookup: {
                 from: "users",
@@ -142,16 +125,10 @@ const getVideoComments = asyncHandler(async (req, res) => {
                 as: "owner",
             },
         },
-        {
-            $unwind: "$owner",
-        },
+        { $unwind: "$owner" },
     ]);
 
-    const options = {
-        page: parseInt(page, 10),
-        limit: parseInt(limit, 10),
-    };
-
+    const options = { page: parseInt(page, 10), limit: parseInt(limit, 10) };
     const comments = await Comment.aggregatePaginate(commentAggregate, options);
 
     return res
@@ -163,13 +140,9 @@ const addTweetComment = asyncHandler(async (req, res) => {
     const { tweetId } = req.params;
     const { content } = req.body;
 
-    if (!isValidObjectId(tweetId)) {
-        throw new ApiError(400, "Invalid tweetId");
-    }
-
-    if (!content || content.trim() === "") {
+    if (!isValidObjectId(tweetId)) throw new ApiError(400, "Invalid tweetId");
+    if (!content || content.trim() === "")
         throw new ApiError(400, "Comment content is required");
-    }
 
     const comment = await Comment.create({
         content,
@@ -177,13 +150,24 @@ const addTweetComment = asyncHandler(async (req, res) => {
         owner: req.user?._id,
     });
 
-    if (!comment) {
-        throw new ApiError(500, "Failed to add comment");
-    }
+    if (!comment) throw new ApiError(500, "Failed to add comment");
 
-    return res
-        .status(201)
-        .json(new ApiResponse(201, comment, "Comment added successfully"));
+    res.status(201).json(
+        new ApiResponse(201, comment, "Comment added successfully")
+    );
+
+    classifyComment(content)
+        .then(async ({ toxic }) => {
+            if (toxic) {
+                await Comment.findByIdAndUpdate(comment._id, {
+                    isFlagged: true,
+                });
+                console.log(
+                    `[moderation][tweetComment:${comment._id}] Flagged as toxic.`
+                );
+            }
+        })
+        .catch(() => {});
 });
 
 export {

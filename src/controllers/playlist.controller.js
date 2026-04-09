@@ -180,10 +180,6 @@ const getUserPlaylists = asyncHandler(async (req, res) => {
 
     const playlists = await Playlist.find({ owner: userId }).populate("videos");
 
-    if (!playlists.length) {
-        throw new ApiError(404, "Playlist not found");
-    }
-
     return res
         .status(200)
         .json(

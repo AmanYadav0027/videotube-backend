@@ -4,51 +4,46 @@ import { Tweet } from "../models/tweet.model.js";
 import { isValidObjectId } from "mongoose";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import mongoose from "mongoose";
+import { classifyComment } from "../utils/moderationService.js";
 
 const createTweet = asyncHandler(async (req, res) => {
-    // extract content from req.body
-    // validate it to check they are not empty
-    //create a database entry using create
-    // give error if create method fails
-    // return success
-
     const { content } = req.body;
+    if (!content) throw new ApiError(400, "Content is required");
 
-    if (!content) {
-        throw new ApiError(400, "Content is required");
-    }
+    const tweet = await Tweet.create({ content, owner: req.user?._id });
+    if (!tweet) throw new ApiError(500, "Failed to create a tweet");
 
-    const tweet = await Tweet.create({
-        content,
-        owner: req.user?._id,
-    });
+    res.status(201).json(
+        new ApiResponse(201, tweet, "Tweet created successfully")
+    );
 
-    if (!tweet) {
-        throw new ApiError(500, "Failed to create a tweet");
-    }
-
-    return res
-        .status(201)
-        .json(new ApiResponse(201, tweet, "Tweet created successfully"));
+    // Fire-and-forget moderation
+    classifyComment(content)
+        .then(async ({ toxic }) => {
+            if (toxic) {
+                await Tweet.findByIdAndUpdate(tweet._id, { isFlagged: true });
+                console.log(
+                    `[moderation][tweet:${tweet._id}] Flagged as toxic.`
+                );
+            }
+        })
+        .catch((err) => {
+            console.error(
+                `[moderation][tweet:${tweet._id}] Moderation error.`,
+                { error: err.message }
+            );
+        });
 });
 
 const getUserTweets = asyncHandler(async (req, res) => {
-    //get userId from params and validate
-    //find all tweets using userId in find method
-    //populate tweets to display owners fullname and avatar
-    //check the length of tweets if its empty throw error tweets not found
-    //return success
-
     const { userId } = req.params;
-
-    if (!isValidObjectId(userId)) {
-        throw new ApiError(400, "Invalid UserId");
-    }
+    if (!isValidObjectId(userId)) throw new ApiError(400, "Invalid UserId");
 
     const allTweets = await Tweet.aggregate([
         {
             $match: {
                 owner: new mongoose.Types.ObjectId(userId),
+                isFlagged: { $ne: true }, // ← exclude flagged tweets
             },
         },
         {
@@ -59,11 +54,7 @@ const getUserTweets = asyncHandler(async (req, res) => {
                 as: "ownerDetails",
             },
         },
-        {
-            $unwind: {
-                path: "$ownerDetails",
-            },
-        },
+        { $unwind: { path: "$ownerDetails" } },
         {
             $lookup: {
                 from: "likes",
@@ -91,19 +82,15 @@ const getUserTweets = asyncHandler(async (req, res) => {
         {
             $addFields: {
                 likesCount: { $size: "$likeDetails" },
-
                 isLiked: {
                     $cond: {
-                        if: {
-                            $in: [req.user?._id, "$likeDetails.likedBy"],
-                        },
+                        if: { $in: [req.user?._id, "$likeDetails.likedBy"] },
                         then: true,
                         else: false,
                     },
                 },
             },
         },
-
         {
             $project: {
                 content: 1,
@@ -118,11 +105,7 @@ const getUserTweets = asyncHandler(async (req, res) => {
                 },
             },
         },
-        {
-            $sort: {
-                createdAt: -1, // Newest tweets first!
-            },
-        },
+        { $sort: { createdAt: -1 } },
     ]);
 
     return res
@@ -133,72 +116,53 @@ const getUserTweets = asyncHandler(async (req, res) => {
 });
 
 const updateTweet = asyncHandler(async (req, res) => {
-    //get tweetId from params and validate
-    //get content from body and validate
-    //fetch tweet using findById
-    //check if the owner is the one updating the tweet
-    // update content
-    //if failed to update throw error
-    //return success
-
     const { tweetId } = req.params;
-    if (!isValidObjectId(tweetId)) {
-        throw new ApiError(400, "Invalid tweetId");
-    }
+    if (!isValidObjectId(tweetId)) throw new ApiError(400, "Invalid tweetId");
 
     const { content } = req.body;
-    if (!content) {
-        throw new ApiError(400, "Content not found");
-    }
+    if (!content) throw new ApiError(400, "Content not found");
 
     const tweet = await Tweet.findById(tweetId);
-
-    if (!tweetId) {
-        throw new ApiError(404, "Tweet Id not found");
-    }
-
-    if (tweet.owner.toString() !== req.user?._id.toString()) {
+    if (!tweet) throw new ApiError(404, "Tweet not found");
+    if (tweet.owner.toString() !== req.user?._id.toString())
         throw new ApiError(
             403,
             "You do not have permission to modify this tweet"
         );
-    }
 
     tweet.content = content;
+    tweet.isFlagged = false; // reset on edit, re-moderate below
     const updatedTweet = await tweet.save();
 
-    return res
-        .status(200)
-        .json(new ApiResponse(200, updatedTweet, "Tweet updated successfully"));
+    res.status(200).json(
+        new ApiResponse(200, updatedTweet, "Tweet updated successfully")
+    );
+
+    classifyComment(content)
+        .then(async ({ toxic }) => {
+            if (toxic) {
+                await Tweet.findByIdAndUpdate(tweetId, { isFlagged: true });
+                console.log(
+                    `[moderation][tweet:${tweetId}] Re-flagged after edit.`
+                );
+            }
+        })
+        .catch(() => {});
 });
 
 const deleteTweet = asyncHandler(async (req, res) => {
-    //get tweetId from params and validate
-    //find the tweet using findbyid
-    //check if the tweet exist
-    //check if the owner is the one deleting
-    //delete the tweet using deleteOne
-    //return success
-
     const { tweetId } = req.params;
-    if (!isValidObjectId(tweetId)) {
-        throw new ApiError(400, "Invalid TweetId");
-    }
+    if (!isValidObjectId(tweetId)) throw new ApiError(400, "Invalid TweetId");
 
     const tweet = await Tweet.findById(tweetId);
-    if (!tweet) {
-        throw new ApiError(404, "Tweet not found");
-    }
-
-    if (tweet.owner.toString() !== req.user?._id.toString()) {
+    if (!tweet) throw new ApiError(404, "Tweet not found");
+    if (tweet.owner.toString() !== req.user?._id.toString())
         throw new ApiError(
             403,
             "You do not have permission to delete this tweet"
         );
-    }
 
     await tweet.deleteOne();
-
     return res
         .status(200)
         .json(new ApiResponse(200, {}, "Tweet deleted successfully"));
@@ -206,19 +170,14 @@ const deleteTweet = asyncHandler(async (req, res) => {
 
 const toggleRetweet = asyncHandler(async (req, res) => {
     const { tweetId } = req.params;
+    if (!isValidObjectId(tweetId)) throw new ApiError(400, "Invalid tweetId");
 
-    if (!isValidObjectId(tweetId)) {
-        throw new ApiError(400, "Invalid tweetId");
-    }
-
-    // Check if the user has already retweeted this specific tweet
     const existingRetweet = await Tweet.findOne({
         owner: req.user?._id,
         originalTweet: tweetId,
     });
 
     if (existingRetweet) {
-        // Un-retweet: delete the retweet document
         await existingRetweet.deleteOne();
         return res
             .status(200)
@@ -226,12 +185,7 @@ const toggleRetweet = asyncHandler(async (req, res) => {
                 new ApiResponse(200, { retweeted: false }, "Retweet removed")
             );
     } else {
-        // Retweet: create a new tweet document that points to the original
-        await Tweet.create({
-            owner: req.user?._id,
-            originalTweet: tweetId,
-        });
-
+        await Tweet.create({ owner: req.user?._id, originalTweet: tweetId });
         return res
             .status(201)
             .json(

@@ -22,6 +22,10 @@ const commentSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "Tweet",
         },
+        isFlagged: {
+            type: Boolean,
+            default: false,
+        },
     },
     { timestamps: true }
 );
