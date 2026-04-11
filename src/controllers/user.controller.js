@@ -496,9 +496,6 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
 });
 
 const getWatchHistory = asyncHandler(async (req, res) => {
-    // imp for interviews
-    // que //what does you get from the req.user._id
-    //ans //u get a mongodb string which mongeoose automatically converts it into object id when using operation like find etc
     const user = await User.aggregate([
         {
             $match: {
@@ -512,6 +509,9 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                 foreignField: "_id",
                 as: "watchHistory",
                 pipeline: [
+                    // Only include published videos
+                    { $match: { isPublished: true } },
+                    // Join owner info
                     {
                         $lookup: {
                             from: "users",
@@ -529,11 +529,19 @@ const getWatchHistory = asyncHandler(async (req, res) => {
                             ],
                         },
                     },
+                    // Flatten owner array → object
+                    { $addFields: { owner: { $first: "$owner" } } },
+                    // Project only what frontend needs
                     {
-                        $addFields: {
-                            owner: {
-                                $first: "$owner",
-                            },
+                        $project: {
+                            videoFile: 1,
+                            thumbnail: 1,
+                            title: 1,
+                            description: 1,
+                            duration: 1,
+                            views: 1,
+                            createdAt: 1,
+                            owner: 1,
                         },
                     },
                 ],
@@ -546,7 +554,7 @@ const getWatchHistory = asyncHandler(async (req, res) => {
         .json(
             new ApiResponse(
                 200,
-                user[0].watchHistory,
+                user[0]?.watchHistory ?? [],
                 "Watch history fetched successfully"
             )
         );

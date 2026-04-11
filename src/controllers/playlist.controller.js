@@ -4,6 +4,7 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { Playlist } from "./../models/playlist.models.js";
 import { Video } from "./../models/video.models.js";
+import mongoose from "mongoose";
 
 const createPlaylist = asyncHandler(async (req, res) => {
     // extract name and desc from body
@@ -144,41 +145,97 @@ const removeVideoFromPlaylist = asyncHandler(async (req, res) => {
         );
 });
 
-const getPlaylistById = asyncHandler(async (req, res) => {
-    //get playlistId and validate
-    //get the playlist using findById
-    //validate
-    //return success
+// Use aggregation instead so every video has full metadata.
 
+// ── Shared pipeline: resolves videos[] with full metadata ────────────────────
+const videoLookupPipeline = [
+    {
+        $lookup: {
+            from: "videos",
+            localField: "videos",
+            foreignField: "_id",
+            as: "videos",
+            pipeline: [
+                { $match: { isPublished: true } },
+                {
+                    $lookup: {
+                        from: "users",
+                        localField: "owner",
+                        foreignField: "_id",
+                        as: "owner",
+                        pipeline: [
+                            {
+                                $project: {
+                                    fullName: 1,
+                                    username: 1,
+                                    avatar: 1,
+                                },
+                            },
+                        ],
+                    },
+                },
+                { $addFields: { owner: { $first: "$owner" } } },
+                {
+                    $project: {
+                        videoFile: 1,
+                        thumbnail: 1,
+                        title: 1,
+                        description: 1,
+                        duration: 1,
+                        views: 1,
+                        createdAt: 1,
+                        owner: 1,
+                    },
+                },
+            ],
+        },
+    },
+    // Resolve playlist owner info
+    {
+        $lookup: {
+            from: "users",
+            localField: "owner",
+            foreignField: "_id",
+            as: "ownerInfo",
+            pipeline: [{ $project: { fullName: 1, username: 1, avatar: 1 } }],
+        },
+    },
+    { $addFields: { ownerInfo: { $first: "$ownerInfo" } } },
+];
+
+const getPlaylistById = asyncHandler(async (req, res) => {
     const { playlistId } = req.params;
 
     if (!isValidObjectId(playlistId)) {
         throw new ApiError(400, "Invalid PlaylistId");
     }
 
-    const playlist = await Playlist.findById(playlistId).populate("videos");
+    const result = await Playlist.aggregate([
+        { $match: { _id: new mongoose.Types.ObjectId(playlistId) } },
+        ...videoLookupPipeline,
+    ]);
 
-    if (!playlist) {
+    if (!result?.length) {
         throw new ApiError(404, "Playlist not found");
     }
 
     return res
         .status(200)
-        .json(new ApiResponse(200, playlist, "Playlist found Successfully"));
+        .json(new ApiResponse(200, result[0], "Playlist found successfully"));
 });
 
 const getUserPlaylists = asyncHandler(async (req, res) => {
-    //extract userId and validate
-    //use find to fetch all the playlist owned by user
-    //return success
-
     const { userId } = req.params;
 
     if (!isValidObjectId(userId)) {
         throw new ApiError(400, "Invalid userId");
     }
 
-    const playlists = await Playlist.find({ owner: userId }).populate("videos");
+    const playlists = await Playlist.aggregate([
+        { $match: { owner: new mongoose.Types.ObjectId(userId) } },
+        ...videoLookupPipeline,
+        { $sort: { createdAt: -1 } },
+    ]);
 
     return res
         .status(200)

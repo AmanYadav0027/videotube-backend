@@ -101,11 +101,9 @@ const getVideoById = asyncHandler(async (req, res) => {
     const video = await Video.aggregate([
         // Stage 1: find the video
         {
-            $match: {
-                _id: new mongoose.Types.ObjectId(videoId),
-            },
+            $match: { _id: new mongoose.Types.ObjectId(videoId) },
         },
-        // Stage 2: join owner from users collection
+        // Stage 2: join owner from users
         {
             $lookup: {
                 from: "users",
@@ -114,11 +112,9 @@ const getVideoById = asyncHandler(async (req, res) => {
                 as: "owner",
             },
         },
-        // Stage 3: $unwind converts owner from [{...}] to {...}
-        {
-            $unwind: "$owner",
-        },
-        // Stage 4: join likes to count them
+        // Stage 3: flatten owner array → object
+        { $unwind: "$owner" },
+        // Stage 4: count likes
         {
             $lookup: {
                 from: "likes",
@@ -127,7 +123,16 @@ const getVideoById = asyncHandler(async (req, res) => {
                 as: "likes",
             },
         },
-        // Stage 5: project only what frontend needs
+        // Stage 5: count subscribers for the owner ← NEW
+        {
+            $lookup: {
+                from: "subscriptions",
+                localField: "owner._id",
+                foreignField: "channel",
+                as: "ownerSubscribers",
+            },
+        },
+        // Stage 6: project
         {
             $project: {
                 videoFile: 1,
@@ -138,6 +143,7 @@ const getVideoById = asyncHandler(async (req, res) => {
                 views: 1,
                 createdAt: 1,
                 likesCount: { $size: "$likes" },
+                subscribersCount: { $size: "$ownerSubscribers" }, // ← NEW
                 "owner._id": 1,
                 "owner.username": 1,
                 "owner.fullName": 1,
