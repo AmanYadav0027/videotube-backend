@@ -4,12 +4,17 @@ import { Like } from "../models/like.models.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import mongoose from "mongoose";
+import { notifyLike } from "../utils/notificationHelper.js";
+import { Video } from "../models/video.models.js"; // ← ADDED: needed to fetch video.owner for notification
 
 const toggleVideoLike = asyncHandler(async (req, res) => {
     //get videoId from params and validate
+    //ADDED: fetch the video document so we have video.owner for the notification
     //check if the like doc exist matching with the userId
-    //if yes delete the doc and give a message response disliked the video
-    //if not create one and give a message responnse liked the video
+    //declare isliked
+    //if yes delete the doc and set isliked to false
+    //if not create one and set isliked to true
+    //ADDED: notify video owner on like only (not on unlike)
     //return success
 
     const { videoId } = req.params;
@@ -18,38 +23,36 @@ const toggleVideoLike = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Invalid videoId");
     }
 
-    const like = await Like.findOne({
+    const video = await Video.findById(videoId).select("owner");
+    if (!video) {
+        throw new ApiError(404, "Video not found");
+    }
+
+    const existingLike = await Like.findOne({
         video: videoId,
-        likedBy: req.user?._id,
+        likedBy: req.user._id,
     });
 
-    if (like) {
-        await Like.findByIdAndDelete(like._id);
-        return res
-            .status(200)
-            .json(
-                new ApiResponse(
-                    200,
-                    { videoLiked: false },
-                    "Video disliked successfully"
-                )
-            );
+    let isLiked;
+    if (existingLike) {
+        await existingLike.deleteOne();
+        isLiked = false;
     } else {
-        await Like.create({
-            video: videoId,
-            likedBy: req.user?._id,
-        });
-
-        return res
-            .status(201)
-            .json(
-                new ApiResponse(
-                    201,
-                    { VideoLiked: true },
-                    "Video liked successfully"
-                )
-            );
+        await Like.create({ video: videoId, likedBy: req.user._id });
+        isLiked = true;
     }
+
+    if (isLiked) notifyLike(video.owner, req.user._id, videoId);
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                { VideoLiked: isLiked },
+                isLiked ? "Video liked" : "Video unliked"
+            )
+        );
 });
 
 const toggleCommentLike = asyncHandler(async (req, res) => {
@@ -198,9 +201,6 @@ const getLikedVideos = asyncHandler(async (req, res) => {
                 views: "$videoDetails.views",
                 duration: "$videoDetails.duration",
                 createdAt: "$videoDetails.createdAt",
-
-                // Use $ifNull to safely return the value, or null if it doesn't exist
-                // This stops MongoDB from returning literal string names!
                 owner: {
                     _id: { $ifNull: ["$ownerDetails._id", null] },
                     username: {

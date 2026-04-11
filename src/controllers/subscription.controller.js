@@ -3,13 +3,16 @@ import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiError } from "../utils/ApiError.js";
 import { Subscription } from "./../models/subscription.models.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import { notifySubscribe } from "../utils/notificationHelper.js";
 
 const toggleSubscription = asyncHandler(async (req, res) => {
     //get channelId from params and validate
     //check if the user is subscribing his own channel
     //check for existing subscription
-    // if it exist delete the doc
-    // if not create a doc containing user and channel id
+    //if it exist delete the doc (unsubscribe)
+    // removed `if (isSubscribed)` guard — isSubscribed was never declared, caused ReferenceError
+    // notify only in the subscribe branch, not the unsubscribe branch
+    //if not create a doc containing user and channel id and send a notification
 
     const { channelId } = req.params;
 
@@ -42,6 +45,8 @@ const toggleSubscription = asyncHandler(async (req, res) => {
             subscriber: req.user?._id,
             channel: channelId,
         });
+
+        notifySubscribe(channelId, req.user._id);
         return res
             .status(201)
             .json(

@@ -12,6 +12,8 @@ import fs from "fs";
 import { generateFileHash } from "../utils/fileHash.js";
 import { triggerTranscription } from "../utils/aiHelper.js";
 import { TranscriptChunk } from "../models/transcriptChunk.models.js";
+import { Subscription } from "../models/subscription.models.js";
+import { notifyUpload } from "../utils/notificationHelper.js";
 
 const publishAVideo = asyncHandler(async (req, res) => {
     // grab title and description from req.body
@@ -20,6 +22,7 @@ const publishAVideo = asyncHandler(async (req, res) => {
     //throw error if any one of the file is missing
     //upload on cloudinary
     //save to database
+    //fan-out upload notification to all subscribers
     //return success
 
     const { title, description } = req.body;
@@ -79,6 +82,17 @@ const publishAVideo = asyncHandler(async (req, res) => {
     }
 
     triggerTranscription(video.videoFile, video._id);
+
+    Subscription.find({ channel: req.user._id })
+        .select("subscriber")
+        .lean()
+        .then((subs) => {
+            notifyUpload(
+                subs.map((s) => s.subscriber),
+                req.user._id,
+                video._id
+            );
+        });
 
     return res
         .status(201)
@@ -266,17 +280,11 @@ const deleteVideo = asyncHandler(async (req, res) => {
 });
 
 const getAllVideos = asyncHandler(async (req, res) => {
-    //get data from req.query
-    //convert page and limit in integer cause req.query always return string
-
-    //aggregate pipeline  //imp and difficult //needs attention
-
-    //Execute Pagination
-    //return success
-
     const { page = 1, limit = 10, query, sortBy, sortType, userId } = req.query;
 
-    const matchCondition = {};
+    const matchCondition = {
+        isPublished: true,
+    };
 
     if (query) {
         matchCondition.$or = [
@@ -286,22 +294,22 @@ const getAllVideos = asyncHandler(async (req, res) => {
     }
 
     if (userId) {
-        matchCondition.owner = new mongoose.Types.objectId(userId);
+        matchCondition.owner = new mongoose.Types.ObjectId(userId);
     }
 
     const sortOptions = {};
-
     if (sortBy && sortType) {
         sortOptions[sortBy] = sortType === "asc" ? 1 : -1;
     } else {
         sortOptions.createdAt = -1;
     }
 
-    // Replace this block in getAllVideos
     const videoAggregate = Video.aggregate([
+        // Stage 1: filter by match conditions (isPublished, query, userId)
         {
             $match: matchCondition,
         },
+        // Stage 2: join owner
         {
             $lookup: {
                 from: "users",
@@ -310,12 +318,18 @@ const getAllVideos = asyncHandler(async (req, res) => {
                 as: "owner",
             },
         },
+        // Stage 3: flatten owner array
         {
-            // $lookup returns an array. $unwind turns it back into a single object.
             $unwind: "$owner",
         },
+        //  $sort BEFORE $project — sortBy fields (views, createdAt) must
+        // still exist on the document when $sort runs. $project used to come
+        // before $sort, which stripped createdAt/views, making all sorts identical.
         {
-            // Security Check: Only send the specific owner data the frontend needs!
+            $sort: sortOptions,
+        },
+        // Stage 4: project only what frontend needs
+        {
             $project: {
                 videoFile: 1,
                 thumbnail: 1,
@@ -329,9 +343,6 @@ const getAllVideos = asyncHandler(async (req, res) => {
                 "owner.username": 1,
                 "owner.avatar": 1,
             },
-        },
-        {
-            $sort: sortOptions,
         },
     ]);
 

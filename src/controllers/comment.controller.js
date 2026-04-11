@@ -5,8 +5,19 @@ import { ApiError } from "../utils/ApiError.js";
 import { Comment } from "../models/comment.models.js";
 import mongoose from "mongoose";
 import { classifyComment } from "../utils/moderationService.js";
+import { notifyComment } from "../utils/notificationHelper.js";
+import { Video } from "../models/video.models.js";
 
 const addComment = asyncHandler(async (req, res) => {
+    //get videoId from params and validate
+    //get content from req.body and validate
+    //create the comment in database
+    //validate creation
+    //send response before running async tasks (moderation + notification)
+    //single classifyComment call with correct signature (comment._id + content)
+    //removed duplicate second classifyComment block that was below res.json() with wrong signature
+    //fire-and-forget: notify video owner about the new comment
+
     const { videoId } = req.params;
     if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid VideoId");
 
@@ -20,14 +31,14 @@ const addComment = asyncHandler(async (req, res) => {
         owner: req.user?._id,
     });
 
-    if (!comment) throw new ApiError(500, "failed to create a comment");
+    if (!comment) throw new ApiError(500, "Failed to create a comment");
 
-    // Fire-and-forget moderation — response already sent, runs in background
+    // Send response first so the client isn't waiting on moderation
     res.status(201).json(
         new ApiResponse(201, comment, "Comment created successfully")
     );
 
-    classifyComment(content)
+    classifyComment(comment._id, content)
         .then(async ({ toxic }) => {
             if (toxic) {
                 await Comment.findByIdAndUpdate(comment._id, {
@@ -44,9 +55,24 @@ const addComment = asyncHandler(async (req, res) => {
                 { error: err.message }
             );
         });
+
+    Video.findById(videoId)
+        .select("owner")
+        .then((video) => {
+            if (video)
+                notifyComment(video.owner, req.user._id, videoId, comment._id);
+        });
 });
 
 const updateComment = asyncHandler(async (req, res) => {
+    //get commentId from params and validate
+    //get content from req.body and validate
+    //fetch comment and check if it exists
+    //check if the owner is the one updating
+    //update the content and reset isFlagged to false
+    //save and send response
+    //re-moderate the edited comment fire-and-forget
+
     const { commentId } = req.params;
     if (!isValidObjectId(commentId))
         throw new ApiError(400, "Invalid CommentId");
@@ -72,7 +98,7 @@ const updateComment = asyncHandler(async (req, res) => {
     );
 
     // Re-moderate edited comment
-    classifyComment(content)
+    classifyComment(comment._id, content)
         .then(async ({ toxic }) => {
             if (toxic) {
                 await Comment.findByIdAndUpdate(commentId, { isFlagged: true });
@@ -85,6 +111,12 @@ const updateComment = asyncHandler(async (req, res) => {
 });
 
 const deleteComment = asyncHandler(async (req, res) => {
+    //get commentId from params and validate
+    //fetch comment and check if it exists
+    //check if the owner is the one deleting
+    //delete using deleteOne
+    //return success
+
     const { commentId } = req.params;
     if (!isValidObjectId(commentId))
         throw new ApiError(400, "Invalid CommentId");
@@ -104,16 +136,20 @@ const deleteComment = asyncHandler(async (req, res) => {
 });
 
 const getVideoComments = asyncHandler(async (req, res) => {
+    //get videoId from params and validate
+    //use aggregatePaginate with $match (exclude flagged), $sort, $lookup for owner
+    //return paginated comments
+
     const { videoId } = req.params;
     if (!isValidObjectId(videoId)) throw new ApiError(400, "Invalid videoId");
 
-    const { page = 1, limit = 1 } = req.query;
+    const { page = 1, limit = 10 } = req.query;
 
     const commentAggregate = Comment.aggregate([
         {
             $match: {
                 video: new mongoose.Types.ObjectId(videoId),
-                isFlagged: { $ne: true }, // ← exclude flagged comments
+                isFlagged: { $ne: true }, // exclude flagged comments
             },
         },
         { $sort: { createdAt: -1 } },
@@ -137,6 +173,12 @@ const getVideoComments = asyncHandler(async (req, res) => {
 });
 
 const addTweetComment = asyncHandler(async (req, res) => {
+    //get tweetId from params and validate
+    //get content from req.body and validate
+    //create comment in database
+    //validate creation
+    //send response before running async moderation
+
     const { tweetId } = req.params;
     const { content } = req.body;
 
@@ -156,7 +198,7 @@ const addTweetComment = asyncHandler(async (req, res) => {
         new ApiResponse(201, comment, "Comment added successfully")
     );
 
-    classifyComment(content)
+    classifyComment(comment._id, content)
         .then(async ({ toxic }) => {
             if (toxic) {
                 await Comment.findByIdAndUpdate(comment._id, {

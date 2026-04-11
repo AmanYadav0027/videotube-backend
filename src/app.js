@@ -28,6 +28,7 @@ import healthcheckRouter from "./routes/healthcheck.routes.js";
 import dashboardRouter from "./routes/dashboard.routes.js";
 import webhookRouter from "./routes/webhook.routes.js";
 import chatRouter from "./routes/chat.routes.js";
+import supportRouter from "./routes/support.routes.js";
 
 //routes declaration
 app.use("/api/v2/users", userRouter);
@@ -41,6 +42,7 @@ app.use("/api/v2/healthchecks", healthcheckRouter);
 app.use("/api/v2/dashboards", dashboardRouter);
 app.use("/api/v2/webhooks", webhookRouter);
 app.use("/api/v2/chat", chatRouter);
+app.use("/api/v2/support", supportRouter);
 
 //http:localhost:8000/api/v2/users/register
 

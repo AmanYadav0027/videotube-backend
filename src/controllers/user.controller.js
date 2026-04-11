@@ -310,32 +310,40 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
-    // 1. Receive: Get the new fullName and email from the request body.
-    // 2. Validate: Are they empty? If so, throw an error.
-    // 3. Database: Find the user by ID and update their fullName and email fields. Return the new updated document (without the password).
-    // 4. Respond: Send a 200 Success status with the updated user data.
-
-    const { fullName, email } = req.body;
+    const { fullName, email, username } = req.body;
 
     if (!fullName || !email) {
-        throw new ApiError(400, "All fields are required");
+        throw new ApiError(400, "Full name and email are required");
+    }
+
+    // Build update object — only include username if provided
+    const updateFields = { fullName, email };
+
+    if (username) {
+        const trimmed = username.trim().toLowerCase();
+
+        // Check uniqueness (exclude current user)
+        const taken = await User.findOne({
+            username: trimmed,
+            _id: { $ne: req.user._id },
+        });
+        if (taken) {
+            throw new ApiError(409, "Username is already taken");
+        }
+
+        updateFields.username = trimmed;
     }
 
     const user = await User.findByIdAndUpdate(
-        req.user?._id,
-        {
-            $set: {
-                fullName,
-                email,
-            },
-        },
+        req.user._id,
+        { $set: updateFields },
         { new: true }
-    ).select("-password");
+    ).select("-password -refreshToken");
 
     return res
         .status(200)
         .json(
-            new ApiResponse(200, user, "Account details update successfully")
+            new ApiResponse(200, user, "Account details updated successfully")
         );
 });
 
