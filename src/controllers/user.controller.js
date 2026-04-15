@@ -3,6 +3,8 @@ import { ApiError } from "../utils/ApiError.js";
 import { User } from "../models/user.models.js";
 import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
+import crypto from "crypto";
+import { sendVerificationEmail } from "../utils/sendEmail.js";
 import jwt from "jsonwebtoken";
 import mongoose from "mongoose";
 
@@ -91,6 +93,8 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Avatar file is required");
     }
 
+    const verificationToken = crypto.randomBytes(32).toString("hex");
+
     const user = await User.create({
         fullName,
         avatar: avatar.url,
@@ -98,7 +102,13 @@ const registerUser = asyncHandler(async (req, res) => {
         email,
         password,
         username: username.toLowerCase(),
+        verificationToken,
+        isVerified: false,
     });
+
+    const check = await User.findById(user._id);
+
+    await sendVerificationEmail(email, verificationToken);
 
     const createdUser = await User.findById(user._id).select(
         "-password -refreshToken"
@@ -114,7 +124,37 @@ const registerUser = asyncHandler(async (req, res) => {
     return res
         .status(201)
         .json(
-            new ApiResponse(200, createdUser, "User registered Successfully")
+            new ApiResponse(
+                200,
+                createdUser,
+                "User registered Successfully. Please check your email to verify your account."
+            )
+        );
+});
+
+const verifyEmail = asyncHandler(async (req, res) => {
+    const { token } = req.query;
+
+    if (!token) throw new ApiError(400, "Verification token is missing");
+
+    const user = await User.findOne({ verificationToken: token });
+
+    if (!user) throw new ApiError(400, "Invalid or expired verification token");
+
+    // Use findByIdAndUpdate to avoid triggering the bcrypt pre-save hook
+    await User.findByIdAndUpdate(user._id, {
+        $set: { isVerified: true },
+        $unset: { verificationToken: "" }, // properly removes the field
+    });
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                {},
+                "Email verified successfully. You can now log in."
+            )
         );
 });
 
@@ -148,6 +188,10 @@ const loginUser = asyncHandler(async (req, res) => {
 
     if (!user) {
         throw new ApiError(404, "User does not exist");
+    }
+
+    if (!user.isVerified) {
+        throw new ApiError(403, "Please verify your email before logging in");
     }
 
     const isPasswordValid = await user.isPasswordCorrect(password);
@@ -570,6 +614,7 @@ const getWatchHistory = asyncHandler(async (req, res) => {
 
 export {
     registerUser,
+    verifyEmail,
     loginUser,
     logoutUser,
     refreshAccessToken,

@@ -198,4 +198,19 @@ const toggleRetweet = asyncHandler(async (req, res) => {
     }
 });
 
-export { createTweet, getUserTweets, updateTweet, deleteTweet, toggleRetweet };
+const getTweetFeed = asyncHandler(async (req, res) => {
+    const tweets = await Tweet.find()
+        .sort({ createdAt: -1 })
+        .limit(50)
+        .populate("owner", "username fullName avatar");
+    return res.status(200).json(new ApiResponse(200, tweets, "Feed fetched"));
+});
+
+export {
+    createTweet,
+    getUserTweets,
+    updateTweet,
+    deleteTweet,
+    toggleRetweet,
+    getTweetFeed,
+};

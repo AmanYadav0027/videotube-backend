@@ -11,6 +11,7 @@ import {
     updateUserAvatar,
     updateUserCoverImage,
     getWatchHistory,
+    verifyEmail,
 } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
@@ -31,6 +32,7 @@ router.route("/register").post(
     registerUser
 );
 
+router.route("/verify-email").get(verifyEmail);
 router.route("/login").post(loginUser);
 //secured routes
 router.route("/logout").post(verifyJWT, logoutUser);
