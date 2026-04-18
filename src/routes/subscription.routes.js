@@ -4,10 +4,13 @@ import {
     getSubscribedChannels,
     getUserChannelSubscribers,
     toggleSubscription,
+    getSubscriptionStatus,
 } from "../controllers/subscription.controller.js";
 
 const router = Router();
 router.use(verifyJWT);
+
+router.get("/status/:channelId", getSubscriptionStatus);
 
 router
     .route("/c/:channelId")

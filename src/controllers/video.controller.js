@@ -113,11 +113,11 @@ const getVideoById = asyncHandler(async (req, res) => {
     }
 
     const video = await Video.aggregate([
-        // Stage 1: find the video
+        // Stage 1 — match video
         {
             $match: { _id: new mongoose.Types.ObjectId(videoId) },
         },
-        // Stage 2: join owner from users
+        // Stage 2 — join owner from users
         {
             $lookup: {
                 from: "users",
@@ -126,9 +126,9 @@ const getVideoById = asyncHandler(async (req, res) => {
                 as: "owner",
             },
         },
-        // Stage 3: flatten owner array → object
+        // Stage 3 — flatten owner
         { $unwind: "$owner" },
-        // Stage 4: count likes
+        // Stage 4 — count total likes
         {
             $lookup: {
                 from: "likes",
@@ -137,7 +137,37 @@ const getVideoById = asyncHandler(async (req, res) => {
                 as: "likes",
             },
         },
-        // Stage 5: count subscribers for the owner ← NEW
+        // Stage 5 — check if THIS user liked it (FIX: isLiked persistence)
+        {
+            $lookup: {
+                from: "likes",
+                let: { videoId: "$_id" },
+                pipeline: [
+                    {
+                        $match: {
+                            $expr: {
+                                $and: [
+                                    { $eq: ["$video", "$$videoId"] },
+                                    // req.user may be null for guests — use $toObjectId safely
+                                    {
+                                        $eq: [
+                                            "$likedBy",
+                                            req.user?._id
+                                                ? new mongoose.Types.ObjectId(
+                                                      req.user._id
+                                                  )
+                                                : null,
+                                        ],
+                                    },
+                                ],
+                            },
+                        },
+                    },
+                ],
+                as: "userLike",
+            },
+        },
+        // Stage 6 — count subscribers for the owner
         {
             $lookup: {
                 from: "subscriptions",
@@ -146,7 +176,7 @@ const getVideoById = asyncHandler(async (req, res) => {
                 as: "ownerSubscribers",
             },
         },
-        // Stage 6: project
+        // Stage 7 — project
         {
             $project: {
                 videoFile: 1,
@@ -156,26 +186,29 @@ const getVideoById = asyncHandler(async (req, res) => {
                 duration: 1,
                 views: 1,
                 createdAt: 1,
+                isPublished: 1,
+                aiStatus: 1,
+                aiSummary: 1,
+                aiChapters: 1,
                 likesCount: { $size: "$likes" },
-                subscribersCount: { $size: "$ownerSubscribers" }, // ← NEW
+                subscribersCount: { $size: "$ownerSubscribers" },
+                // FIX: true when the current user has liked this video
+                isLiked: { $gt: [{ $size: "$userLike" }, 0] },
                 "owner._id": 1,
                 "owner.username": 1,
                 "owner.fullName": 1,
                 "owner.avatar": 1,
-                aiStatus: 1,
-                aiSummary: 1,
-                aiChapters: 1,
             },
         },
     ]);
 
     if (!video?.length) {
-        throw new ApiError(404, "video not found");
+        throw new ApiError(404, "Video not found");
     }
 
     return res
         .status(200)
-        .json(new ApiResponse(200, video, "video found successfully"));
+        .json(new ApiResponse(200, video[0], "Video found successfully"));
 });
 
 const updateVideo = asyncHandler(async (req, res) => {

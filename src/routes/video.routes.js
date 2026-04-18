@@ -13,35 +13,36 @@ import {
     optionalVerifyJWT,
 } from "../middlewares/auth.middleware.js";
 import { upload } from "../middlewares/multer.middleware.js";
+import { uploadLimiter } from "../middlewares/rateLimit.middleware.js";
 
 const router = Router();
+
+router.route("/").get(getAllVideos);
+
+router.route("/:videoId").get(getVideoById);
+
+router.post("/:videoId/view", optionalVerifyJWT, incrementVideoViews);
+
+// ==========================================
+// 2. PROTECTED ROUTES
+// ==========================================
+
 router.use(verifyJWT);
 
-router
-    .route("/")
-    .get(getAllVideos)
-    .post(
-        upload.fields([
-            {
-                name: "videoFile",
-                maxCount: 1,
-            },
-            {
-                name: "thumbnail",
-                maxCount: 1,
-            },
-        ]),
-        publishAVideo
-    );
+router.route("/").post(
+    uploadLimiter,
+    upload.fields([
+        { name: "videoFile", maxCount: 1 },
+        { name: "thumbnail", maxCount: 1 },
+    ]),
+    publishAVideo
+);
 
 router
     .route("/:videoId")
-    .get(getVideoById)
     .delete(deleteVideo)
     .patch(upload.single("thumbnail"), updateVideo);
 
 router.route("/toggle/publish/:videoId").patch(togglePublishStatus);
-
-router.post("/:videoId/view", optionalVerifyJWT, incrementVideoViews);
 
 export default router;

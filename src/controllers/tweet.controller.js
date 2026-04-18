@@ -199,11 +199,58 @@ const toggleRetweet = asyncHandler(async (req, res) => {
 });
 
 const getTweetFeed = asyncHandler(async (req, res) => {
-    const tweets = await Tweet.find()
-        .sort({ createdAt: -1 })
-        .limit(50)
-        .populate("owner", "username fullName avatar");
-    return res.status(200).json(new ApiResponse(200, tweets, "Feed fetched"));
+    const { page = 1, limit = 50 } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+
+    const tweets = await Tweet.aggregate([
+        // Exclude flagged tweets
+        { $match: { isFlagged: { $ne: true } } },
+        // Newest first
+        { $sort: { createdAt: -1 } },
+        { $skip: skip },
+        { $limit: parseInt(limit) },
+        // Join owner
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner",
+                pipeline: [
+                    { $project: { username: 1, fullName: 1, avatar: 1 } },
+                ],
+            },
+        },
+        { $unwind: "$owner" },
+        // Count likes if needed
+        {
+            $lookup: {
+                from: "likes",
+                localField: "_id",
+                foreignField: "tweet",
+                as: "likes",
+            },
+        },
+        {
+            $addFields: {
+                likesCount: { $size: "$likes" },
+            },
+        },
+        {
+            $project: {
+                content: 1,
+                createdAt: 1,
+                updatedAt: 1,
+                isFlagged: 1,
+                likesCount: 1,
+                owner: 1,
+            },
+        },
+    ]);
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, tweets, "Tweet feed fetched successfully"));
 });
 
 export {

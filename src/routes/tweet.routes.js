@@ -16,6 +16,6 @@ router.route("/").post(createTweet);
 router.route("/user/:userId").get(getUserTweets);
 router.route("/:tweetId").patch(updateTweet).delete(deleteTweet);
 router.route("/toggle-retweet/:tweetId").post(toggleRetweet);
-router.get("/feed", verifyJWT, getTweetFeed);
+router.get("/feed", getTweetFeed);
 
 export default router;

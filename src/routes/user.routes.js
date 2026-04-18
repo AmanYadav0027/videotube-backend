@@ -12,14 +12,20 @@ import {
     updateUserCoverImage,
     getWatchHistory,
     verifyEmail,
+    searchChannels,
 } from "../controllers/user.controller.js";
 import { upload } from "../middlewares/multer.middleware.js";
 import { verifyJWT } from "../middlewares/auth.middleware.js";
+import { authLimiter } from "../middlewares/rateLimit.middleware.js";
 
 const router = Router();
 
+// PUBLIC ROUTES
+
 router.route("/register").post(
+    authLimiter, // 1. Rate limit first
     upload.fields([
+        // 2. Handle file uploads second
         {
             name: "avatar",
             maxCount: 1,
@@ -29,14 +35,20 @@ router.route("/register").post(
             maxCount: 1,
         },
     ]),
-    registerUser
+    registerUser // 3. Run the controller
 );
 
+router.route("/login").post(authLimiter, loginUser);
+
 router.route("/verify-email").get(verifyEmail);
-router.route("/login").post(loginUser);
-//secured routes
+
+router.route("/refresh-token").post(authLimiter, refreshAccessToken);
+
+router.route("/search").get(searchChannels);
+
+// SECURED ROUTES
+
 router.route("/logout").post(verifyJWT, logoutUser);
-router.route("/refresh-token").post(refreshAccessToken);
 router.route("/change-password").post(verifyJWT, changeCurrentPassword);
 router.route("/current-user").get(verifyJWT, getCurrentUser);
 router.route("/update-account").patch(verifyJWT, updateAccountDetails);
@@ -44,6 +56,7 @@ router.route("/update-account").patch(verifyJWT, updateAccountDetails);
 router
     .route("/avatar")
     .patch(verifyJWT, upload.single("avatar"), updateUserAvatar);
+
 router
     .route("/cover-image")
     .patch(verifyJWT, upload.single("coverImage"), updateUserCoverImage);

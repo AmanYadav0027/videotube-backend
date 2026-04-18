@@ -30,6 +30,7 @@ import webhookRouter from "./routes/webhook.routes.js";
 import chatRouter from "./routes/chat.routes.js";
 import supportRouter from "./routes/support.routes.js";
 import notificaotion from "./routes/notification.routes.js";
+import { apiLimiter } from "./middlewares/rateLimit.middleware.js";
 
 //routes declaration
 app.use("/api/v2/users", userRouter);
@@ -48,7 +49,17 @@ app.use("/api/v2/notifications", notificaotion);
 
 //http:localhost:8000/api/v2/users/register
 
+// Global — apply to all /api routes
+app.use("/api", apiLimiter);
+
 app.use((err, req, res, next) => {
+    if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(413).json({
+            success: false,
+            message:
+                "File too large. Maximum video size is 100MB on the free plan.",
+        });
+    }
     const statusCode = err.statusCode || 500;
 
     return res.status(statusCode).json({

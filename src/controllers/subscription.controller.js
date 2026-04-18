@@ -30,6 +30,7 @@ const toggleSubscription = asyncHandler(async (req, res) => {
     });
 
     if (subscription) {
+        // ── UNSUBSCRIBE ──────────────────────────────────────────────────────
         await subscription.deleteOne();
         return res
             .status(200)
@@ -41,11 +42,12 @@ const toggleSubscription = asyncHandler(async (req, res) => {
                 )
             );
     } else {
+        // ── SUBSCRIBE ────────────────────────────────────────────────────────
         await Subscription.create({
             subscriber: req.user?._id,
             channel: channelId,
         });
-
+        // Fire-and-forget notification — never throws
         notifySubscribe(channelId, req.user._id);
         return res
             .status(201)
@@ -57,6 +59,29 @@ const toggleSubscription = asyncHandler(async (req, res) => {
                 )
             );
     }
+});
+
+const getSubscriptionStatus = asyncHandler(async (req, res) => {
+    const { channelId } = req.params;
+
+    if (!isValidObjectId(channelId)) {
+        throw new ApiError(400, "Invalid Channel Id");
+    }
+
+    const subscription = await Subscription.findOne({
+        subscriber: req.user._id,
+        channel: channelId,
+    });
+
+    return res
+        .status(200)
+        .json(
+            new ApiResponse(
+                200,
+                { isSubscribed: !!subscription },
+                "Subscription status fetched"
+            )
+        );
 });
 
 const getUserChannelSubscribers = asyncHandler(async (req, res) => {
@@ -121,4 +146,9 @@ const getSubscribedChannels = asyncHandler(async (req, res) => {
         );
 });
 
-export { toggleSubscription, getUserChannelSubscribers, getSubscribedChannels };
+export {
+    toggleSubscription,
+    getSubscriptionStatus,
+    getUserChannelSubscribers,
+    getSubscribedChannels,
+};

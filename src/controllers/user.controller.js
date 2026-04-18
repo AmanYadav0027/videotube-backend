@@ -547,6 +547,30 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         );
 });
 
+const searchChannels = asyncHandler(async (req, res) => {
+    const { q } = req.query;
+
+    if (!q?.trim()) {
+        throw new ApiError(400, "Search query is required");
+    }
+
+    if (q.trim().length < 2) {
+        throw new ApiError(400, "Query must be at least 2 characters");
+    }
+
+    const users = await User.find({
+        $or: [
+            { username: { $regex: q.trim(), $options: "i" } },
+            { fullName: { $regex: q.trim(), $options: "i" } },
+        ],
+    })
+        .select("username fullName avatar")
+        .limit(8)
+        .lean();
+
+    return res.status(200).json(new ApiResponse(200, users, "Channels found"));
+});
+
 const getWatchHistory = asyncHandler(async (req, res) => {
     const user = await User.aggregate([
         {
@@ -625,4 +649,5 @@ export {
     updateUserCoverImage,
     getUserChannelProfile,
     getWatchHistory,
+    searchChannels,
 };
