@@ -10,6 +10,11 @@ const tweetSchema = new Schema(
             type: Schema.Types.ObjectId,
             ref: "User",
         },
+        originalTweet: {
+            type: Schema.Types.ObjectId,
+            ref: "Tweet",
+            default: null,
+        },
         isFlagged: {
             type: Boolean,
             default: false,

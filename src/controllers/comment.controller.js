@@ -7,6 +7,7 @@ import mongoose from "mongoose";
 import { classifyComment } from "../utils/moderationService.js";
 import { notifyComment } from "../utils/notificationHelper.js";
 import { Video } from "../models/video.models.js";
+import { Tweet } from "../models/tweet.model.js";
 
 const addComment = asyncHandler(async (req, res) => {
     //get videoId from params and validate
@@ -113,7 +114,10 @@ const updateComment = asyncHandler(async (req, res) => {
 const deleteComment = asyncHandler(async (req, res) => {
     //get commentId from params and validate
     //fetch comment and check if it exists
-    //check if the owner is the one deleting
+    //Check if the logged-in user is the person who wrote the comment
+    //If they didn't write the comment, check if they own the VIDEO it was posted on
+    //If it's a tweet comment, check if they own the TWEET it was posted on
+    //If they aren't the comment writer AND they don't own the content, block them.
     //delete using deleteOne
     //return success
 
@@ -123,11 +127,25 @@ const deleteComment = asyncHandler(async (req, res) => {
 
     const comment = await Comment.findById(commentId);
     if (!comment) throw new ApiError(404, "comment Doesn't Exist");
-    if (comment.owner.toString() !== req.user?._id.toString())
+    let isAuthorized = comment.owner.toString() === req.user?._id.toString();
+    if (!isAuthorized && comment.video) {
+        const video = await Video.findById(comment.video).select("owner");
+        if (video && video.owner.toString() === req.user?._id.toString()) {
+            isAuthorized = true;
+        }
+    }
+    if (!isAuthorized && comment.tweet) {
+        const tweet = await Tweet.findById(comment.tweet).select("owner");
+        if (tweet && tweet.owner.toString() === req.user?._id.toString()) {
+            isAuthorized = true;
+        }
+    }
+    if (!isAuthorized) {
         throw new ApiError(
             403,
             "You do not have permission to delete this comment"
         );
+    }
 
     await comment.deleteOne();
     return res
@@ -212,10 +230,46 @@ const addTweetComment = asyncHandler(async (req, res) => {
         .catch(() => {});
 });
 
+const getTweetComments = asyncHandler(async (req, res) => {
+    const { tweetId } = req.params;
+    if (!isValidObjectId(tweetId)) throw new ApiError(400, "Invalid tweetId");
+    const { page = 1, limit = 10 } = req.query;
+
+    const aggregate = Comment.aggregate([
+        {
+            $match: {
+                tweet: new mongoose.Types.ObjectId(tweetId),
+                isFlagged: { $ne: true },
+            },
+        },
+        { $sort: { createdAt: -1 } },
+        {
+            $lookup: {
+                from: "users",
+                localField: "owner",
+                foreignField: "_id",
+                as: "owner",
+                pipeline: [{ $project: { username: 1, avatar: 1 } }],
+            },
+        },
+        { $unwind: "$owner" },
+    ]);
+
+    const comments = await Comment.aggregatePaginate(aggregate, {
+        page: parseInt(page),
+        limit: parseInt(limit),
+    });
+
+    return res
+        .status(200)
+        .json(new ApiResponse(200, comments, "Comments fetched"));
+});
+
 export {
     addComment,
     updateComment,
     deleteComment,
     getVideoComments,
     addTweetComment,
+    getTweetComments,
 };

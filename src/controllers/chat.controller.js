@@ -1,8 +1,3 @@
-/**
- * @file chat.controller.js
- * @description Handles RAG chat requests for a specific video.
- */
-
 import { answerQuestion } from "../utils/ragService.js";
 import { Video } from "../models/video.models.js";
 

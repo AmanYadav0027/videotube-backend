@@ -1,11 +1,3 @@
-/**
- * GET /api/v2/dashboard/flagged
- * Returns all flagged comments and tweets owned by the logged-in user's videos/tweets.
- *
- * POST /api/v2/dashboard/flagged/restore/:type/:id
- * Restores a flagged comment or tweet (type = "comment" | "tweet")
- */
-
 import { asyncHandler } from "../utils/asyncHandler.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
@@ -40,15 +32,16 @@ export const getFlaggedContent = asyncHandler(async (req, res) => {
             .lean(),
     ]);
 
-    return res
-        .status(200)
-        .json(
-            new ApiResponse(
-                200,
-                { flaggedComments, flaggedTweets },
-                "Flagged content fetched successfully"
-            )
-        );
+    return res.status(200).json(
+        new ApiResponse(
+            200,
+            {
+                comments: flaggedComments,
+                tweets: flaggedTweets,
+            },
+            "Flagged content fetched successfully"
+        )
+    );
 });
 
 // POST /api/v2/dashboard/flagged/restore/:type/:id

@@ -18,7 +18,7 @@ const createTweet = asyncHandler(async (req, res) => {
     );
 
     // Fire-and-forget moderation
-    classifyComment(content)
+    classifyComment(tweet._id, content)
         .then(async ({ toxic }) => {
             if (toxic) {
                 await Tweet.findByIdAndUpdate(tweet._id, { isFlagged: true });
@@ -138,7 +138,7 @@ const updateTweet = asyncHandler(async (req, res) => {
         new ApiResponse(200, updatedTweet, "Tweet updated successfully")
     );
 
-    classifyComment(content)
+    classifyComment(tweet._id, content)
         .then(async ({ toxic }) => {
             if (toxic) {
                 await Tweet.findByIdAndUpdate(tweetId, { isFlagged: true });
@@ -172,6 +172,9 @@ const toggleRetweet = asyncHandler(async (req, res) => {
     const { tweetId } = req.params;
     if (!isValidObjectId(tweetId)) throw new ApiError(400, "Invalid tweetId");
 
+    const originalTweet = await Tweet.findById(tweetId);
+    if (!originalTweet) throw new ApiError(404, "Tweet not found");
+
     const existingRetweet = await Tweet.findOne({
         owner: req.user?._id,
         originalTweet: tweetId,
@@ -185,13 +188,29 @@ const toggleRetweet = asyncHandler(async (req, res) => {
                 new ApiResponse(200, { retweeted: false }, "Retweet removed")
             );
     } else {
-        await Tweet.create({ owner: req.user?._id, originalTweet: tweetId });
+        const { content } = req.body;
+
+        // Build the content — use provided quote or fall back to a plain retweet label
+        const retweetContent = content?.trim()
+            ? `${content.trim()}\n\n↩ ${originalTweet.content.slice(0, 100)}${originalTweet.content.length > 100 ? "…" : ""}`
+            : `↩ Retweeted: "${originalTweet.content.slice(0, 120)}${originalTweet.content.length > 120 ? "…" : ""}"`;
+
+        const newTweet = await Tweet.create({
+            owner: req.user?._id,
+            originalTweet: tweetId,
+            content: retweetContent,
+        });
+
+        const populated = await Tweet.findById(newTweet._id)
+            .populate("owner", "username fullName avatar")
+            .lean();
+
         return res
             .status(201)
             .json(
                 new ApiResponse(
                     201,
-                    { retweeted: true },
+                    { retweeted: true, tweet: populated },
                     "Retweeted successfully"
                 )
             );
@@ -234,6 +253,20 @@ const getTweetFeed = asyncHandler(async (req, res) => {
         {
             $addFields: {
                 likesCount: { $size: "$likes" },
+                isLiked: {
+                    $cond: {
+                        if: {
+                            $in: [
+                                req.user?._id
+                                    ? new mongoose.Types.ObjectId(req.user._id)
+                                    : null,
+                                "$likes.likedBy",
+                            ],
+                        },
+                        then: true,
+                        else: false,
+                    },
+                },
             },
         },
         {
@@ -243,6 +276,8 @@ const getTweetFeed = asyncHandler(async (req, res) => {
                 updatedAt: 1,
                 isFlagged: 1,
                 likesCount: 1,
+                isLiked: 1,
+                originalTweet: 1,
                 owner: 1,
             },
         },

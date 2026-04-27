@@ -17,17 +17,17 @@ const getChannelStats = asyncHandler(async (req, res) => {
     const userId = new mongoose.Types.ObjectId(req.user?._id);
 
     const totalSubscribersPromise = Subscription.countDocuments({
-        channel: req.user?._id,
+        channel: userId,
     });
 
     const totalVideosPromise = Video.countDocuments({
-        owner: req.user?._id,
+        owner: userId,
     });
 
     const totalViewsPromise = Video.aggregate([
         {
             $match: {
-                owner: new mongoose.Types.ObjectId(req.user?._id),
+                owner: userId,
             },
         },
         {

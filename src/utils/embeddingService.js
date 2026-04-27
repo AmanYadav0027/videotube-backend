@@ -1,9 +1,3 @@
-/**
- * @file embeddingService.js
- * @description Handles transcript chunking and embedding generation.
- * Uses Google's text-embedding-004 model (768 dimensions, same API key as Gemini).
- */
-
 import { geminiClient } from "../config/ai.config.js";
 
 const EMBEDDING_MODEL = "gemini-embedding-001";
@@ -38,15 +32,6 @@ export const chunkTranscript = (text) => {
 // Embedding
 // ─────────────────────────────────────────────
 
-/**
- * Generates a single embedding vector for a piece of text.
- * Uses RETRIEVAL_DOCUMENT task type for stored chunks,
- * RETRIEVAL_QUERY for user questions (better relevance matching).
- *
- * @param {string} text
- * @param {"RETRIEVAL_DOCUMENT"|"RETRIEVAL_QUERY"} taskType
- * @returns {Promise<number[]>} 768-dimensional vector
- */
 export const embedText = async (text, taskType = "RETRIEVAL_DOCUMENT") => {
     const result = await geminiClient.models.embedContent({
         model: EMBEDDING_MODEL,
@@ -57,14 +42,6 @@ export const embedText = async (text, taskType = "RETRIEVAL_DOCUMENT") => {
     return result.embeddings[0].values;
 };
 
-/**
- * Embeds multiple chunks in batches to avoid rate limits.
- * Returns an array of { text, embedding, chunkIndex } objects.
- *
- * @param {string[]} chunks
- * @param {string}   videoId  - for logging only
- * @returns {Promise<Array<{ text: string, embedding: number[], chunkIndex: number }>>}
- */
 export const embedChunks = async (chunks, videoId) => {
     const context = `[embeddingService][embedChunks][video:${videoId}]`;
     const BATCH_SIZE = 5; // embed 5 chunks at a time to stay under rate limits

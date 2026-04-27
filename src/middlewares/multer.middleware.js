@@ -1,11 +1,14 @@
 import multer from "multer";
+import path from "path";
+import { v4 as uuidv4 } from "uuid";
 
 const storage = multer.diskStorage({
     destination: function (req, file, cb) {
         cb(null, "./public/temp");
     },
     filename: function (req, file, cb) {
-        cb(null, file.originalname); //can update it for better performance
+        const ext = path.extname(file.originalname);
+        cb(null, `${uuidv4()}${ext}`);
     },
 });
 

@@ -1,17 +1,5 @@
-/**
- * @file webhook.controller.js
- * @description Handles incoming POST requests from AssemblyAI when transcription completes.
- */
-
 import { processWebhookAndGenerateSummary } from "../utils/aiHelper.js";
 
-/**
- * POST /api/v2/webhooks/assemblyai?videoId=:videoId
- *
- * AssemblyAI calls this when a transcript job finishes.
- * We must respond 200 FAST — any processing happens after the response.
- * If we return 5xx, AssemblyAI will retry (which is fine, but noisy).
- */
 export const handleAssemblyAIWebhook = async (req, res) => {
     const context = `[webhookController][handleAssemblyAIWebhook]`;
 

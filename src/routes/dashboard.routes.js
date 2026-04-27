@@ -15,7 +15,7 @@ router.use(verifyJWT);
 router.route("/stats").get(getChannelStats);
 router.route("/videos").get(getChannelVideos);
 
-router.get("/flagged", verifyJWT, getFlaggedContent);
-router.post("/flagged/restore/:type/:id", verifyJWT, restoreFlaggedContent);
+router.get("/flagged", getFlaggedContent);
+router.post("/flagged/restore/:type/:id", restoreFlaggedContent);
 
 export default router;

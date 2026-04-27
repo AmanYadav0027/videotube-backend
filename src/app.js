@@ -1,6 +1,8 @@
 import express from "express";
 import cors from "cors";
 import cookieParser from "cookie-parser";
+import mongoSanitize from "express-mongo-sanitize";
+import hpp from "hpp";
 
 const app = express();
 
@@ -16,6 +18,21 @@ app.use(express.urlencoded({ extended: true, limit: "16kb" }));
 app.use(express.static("public"));
 app.use(cookieParser());
 
+app.use((req, res, next) => {
+    Object.defineProperty(req, "query", {
+        value: req.query,
+        writable: true,
+        configurable: true,
+        enumerable: true,
+    });
+    next();
+});
+// Strip $ and . from keys to prevent NoSQL injection attacks
+app.use(mongoSanitize());
+
+//  Remove duplicate query/body params to prevent HTTP parameter pollution
+app.use(hpp());
+
 //routes import
 import userRouter from "./routes/user.routes.js";
 import videoRouter from "./routes/video.routes.js";
@@ -29,8 +46,13 @@ import dashboardRouter from "./routes/dashboard.routes.js";
 import webhookRouter from "./routes/webhook.routes.js";
 import chatRouter from "./routes/chat.routes.js";
 import supportRouter from "./routes/support.routes.js";
-import notificaotion from "./routes/notification.routes.js";
+import notificationRouter from "./routes/notification.routes.js";
 import { apiLimiter } from "./middlewares/rateLimit.middleware.js";
+import helmet from "helmet";
+
+app.use(helmet());
+// Global — apply to all /api routes
+app.use("/api", apiLimiter);
 
 //routes declaration
 app.use("/api/v2/users", userRouter);
@@ -45,12 +67,9 @@ app.use("/api/v2/dashboards", dashboardRouter);
 app.use("/api/v2/webhooks", webhookRouter);
 app.use("/api/v2/chat", chatRouter);
 app.use("/api/v2/support", supportRouter);
-app.use("/api/v2/notifications", notificaotion);
+app.use("/api/v2/notifications", notificationRouter);
 
 //http:localhost:8000/api/v2/users/register
-
-// Global — apply to all /api routes
-app.use("/api", apiLimiter);
 
 app.use((err, req, res, next) => {
     if (err.code === "LIMIT_FILE_SIZE") {

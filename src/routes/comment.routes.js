@@ -1,18 +1,32 @@
 import { Router } from "express";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+import {
+    verifyJWT,
+    optionalVerifyJWT,
+} from "../middlewares/auth.middleware.js";
 import {
     addComment,
     updateComment,
     deleteComment,
     getVideoComments,
     addTweetComment,
+    getTweetComments,
 } from "../controllers/comment.controller.js";
 
 const router = Router();
-router.use(verifyJWT);
 
-router.route("/:videoId").post(addComment).get(getVideoComments);
-router.route("/c/:commentId").patch(updateComment).delete(deleteComment);
-router.route("/t/:tweetId").post(addTweetComment);
+router
+    .route("/c/:commentId")
+    .patch(verifyJWT, updateComment)
+    .delete(verifyJWT, deleteComment);
+
+router
+    .route("/t/:tweetId")
+    .post(verifyJWT, addTweetComment)
+    .get(optionalVerifyJWT, getTweetComments);
+
+router
+    .route("/:videoId")
+    .post(verifyJWT, addComment)
+    .get(optionalVerifyJWT, getVideoComments);
 
 export default router;

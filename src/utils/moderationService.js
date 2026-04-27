@@ -22,13 +22,7 @@ Comment: "${comment.replace(/"/g, "'")}"
 // Public
 // ─────────────────────────────────────────────
 
-/**
- * Classifies a comment as toxic or not using Gemini.
- *
- * @param {string} commentText
- * @returns {Promise<{ toxic: boolean, reason: string }>}
- */
-export const classifyComment = async (commentText) => {
+export const classifyComment = async (id, commentText) => {
     const context = `[moderationService][classifyComment]`;
 
     try {

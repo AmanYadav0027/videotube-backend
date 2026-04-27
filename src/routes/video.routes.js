@@ -17,15 +17,9 @@ import { uploadLimiter } from "../middlewares/rateLimit.middleware.js";
 
 const router = Router();
 
-router.route("/").get(getAllVideos);
-
-router.route("/:videoId").get(getVideoById);
-
+router.route("/").get(optionalVerifyJWT, getAllVideos);
+router.route("/:videoId").get(optionalVerifyJWT, getVideoById);
 router.post("/:videoId/view", optionalVerifyJWT, incrementVideoViews);
-
-// ==========================================
-// 2. PROTECTED ROUTES
-// ==========================================
 
 router.use(verifyJWT);
 

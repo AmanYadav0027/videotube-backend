@@ -17,7 +17,7 @@ const transcriptChunkSchema = new Schema(
             required: true,
         },
         embedding: {
-            type: [Number], // 768-dimensional vector from text-embedding-004
+            type: [Number],
             required: true,
         },
     },

@@ -62,8 +62,28 @@ const registerUser = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Password must be at least 8 character long");
     }
 
+    // #10 — Sanitize username: lowercase, strip all non-alphanumeric/underscore/hyphen chars,
+    // collapse multiple spaces, reject if invalid characters remain after sanitization.
+    const sanitizedUsername = username
+        .trim()
+        .toLowerCase()
+        .replace(/\s+/g, "_")
+        .replace(/[^a-z0-9_-]/g, "");
+
+    if (!sanitizedUsername) {
+        throw new ApiError(400, "Username contains only invalid characters");
+    }
+
+    if (sanitizedUsername.length < 3) {
+        throw new ApiError(400, "Username must be at least 3 characters long");
+    }
+
+    if (sanitizedUsername.length > 30) {
+        throw new ApiError(400, "Username must not exceed 30 characters");
+    }
+
     const existedUser = await User.findOne({
-        $or: [{ username }, { email }],
+        $or: [{ username: sanitizedUsername }, { email }],
     });
 
     if (existedUser) {
@@ -101,12 +121,10 @@ const registerUser = asyncHandler(async (req, res) => {
         coverImage: coverImage?.url || "",
         email,
         password,
-        username: username.toLowerCase(),
+        username: sanitizedUsername,
         verificationToken,
         isVerified: false,
     });
-
-    const check = await User.findById(user._id);
 
     await sendVerificationEmail(email, verificationToken);
 
@@ -402,13 +420,15 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     const avatarLocalPath = req.file?.path;
 
     if (!avatarLocalPath) {
-        throw new ApiEoor(400, "Avatar file is missing");
+        throw new ApiError(400, "Avatar file is missing");
     }
 
     const avatar = await uploadOnCloudinary(avatarLocalPath);
 
-    if (!avatar.url) {
-        throw new ApiEoor(400, "Error while uploading the avatar");
+    // #18 — Guard against null return from uploadOnCloudinary before accessing .url
+    // Previously `if (!avatar.url)` would throw a TypeError crash when avatar is null
+    if (!avatar || !avatar.url) {
+        throw new ApiError(400, "Error while uploading the avatar");
     }
 
     const user = await User.findByIdAndUpdate(
@@ -437,13 +457,15 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     const coverImageLocalPath = req.file?.path;
 
     if (!coverImageLocalPath) {
-        throw new ApiEoor(400, "Cover image file is missing");
+        throw new ApiError(400, "Cover image file is missing");
     }
 
     const coverImage = await uploadOnCloudinary(coverImageLocalPath);
 
-    if (!coverImage.url) {
-        throw new ApiEoor(400, "Error while uploading the Cover Image");
+    // #18 — Guard against null return from uploadOnCloudinary before accessing .url
+    // Previously `if (!coverImage.url)` would throw a TypeError crash when coverImage is null
+    if (!coverImage || !coverImage.url) {
+        throw new ApiError(400, "Error while uploading the Cover Image");
     }
 
     const user = await User.findByIdAndUpdate(

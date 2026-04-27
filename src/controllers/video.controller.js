@@ -137,7 +137,7 @@ const getVideoById = asyncHandler(async (req, res) => {
                 as: "likes",
             },
         },
-        // Stage 5 — check if THIS user liked it (FIX: isLiked persistence)
+        // Stage 5 — check if THIS user liked it ( isLiked persistence)
         {
             $lookup: {
                 from: "likes",
@@ -192,7 +192,7 @@ const getVideoById = asyncHandler(async (req, res) => {
                 aiChapters: 1,
                 likesCount: { $size: "$likes" },
                 subscribersCount: { $size: "$ownerSubscribers" },
-                // FIX: true when the current user has liked this video
+                //  true when the current user has liked this video
                 isLiked: { $gt: [{ $size: "$userLike" }, 0] },
                 "owner._id": 1,
                 "owner.username": 1,
@@ -235,6 +235,11 @@ const updateVideo = asyncHandler(async (req, res) => {
 
     if (!video) {
         throw new ApiError(404, "video not found");
+    }
+
+    // #5 — Ownership check: only the video owner can update it
+    if (video.owner.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "You are not authorized to update this video");
     }
 
     const updateData = {
@@ -299,6 +304,11 @@ const deleteVideo = asyncHandler(async (req, res) => {
             404,
             "the video doesn't exist or was already deleted"
         );
+    }
+
+    // #5 — Ownership check: only the video owner can delete it
+    if (video.owner.toString() !== req.user._id.toString()) {
+        throw new ApiError(403, "You are not authorized to delete this video");
     }
 
     await deleteFromCloudinary(video.thumbnail);
@@ -410,6 +420,14 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
         throw new ApiError(404, "Video is not available");
     }
 
+    // #5 — Ownership check: only the video owner can toggle publish status
+    if (video.owner.toString() !== req.user._id.toString()) {
+        throw new ApiError(
+            403,
+            "You are not authorized to change the publish status of this video"
+        );
+    }
+
     video.isPublished = !video.isPublished;
 
     await video.save({ validateBeforeSave: false });
@@ -421,7 +439,7 @@ const togglePublishStatus = asyncHandler(async (req, res) => {
 
 const recentViews = new Set(); // module-level, lives for server lifetime
 
-const incrementVideoViews = async (req, res) => {
+const incrementVideoViews = asyncHandler(async (req, res) => {
     const { videoId } = req.params;
     const clientKey = `${req.ip}_${videoId}`;
 
@@ -444,7 +462,7 @@ const incrementVideoViews = async (req, res) => {
     }
 
     return res.status(200).json({ success: true });
-};
+});
 
 export {
     publishAVideo,

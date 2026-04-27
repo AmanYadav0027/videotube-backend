@@ -5,16 +5,16 @@ import { ApiResponse } from "../utils/ApiResponse.js";
 import { ApiError } from "../utils/ApiError.js";
 import mongoose from "mongoose";
 import { notifyLike } from "../utils/notificationHelper.js";
-import { Video } from "../models/video.models.js"; // ← ADDED: needed to fetch video.owner for notification
+import { Video } from "../models/video.models.js";
 
 const toggleVideoLike = asyncHandler(async (req, res) => {
     //get videoId from params and validate
-    //ADDED: fetch the video document so we have video.owner for the notification
+    // fetch the video document so we have video.owner for the notification
     //check if the like doc exist matching with the userId
     //declare isliked
     //if yes delete the doc and set isliked to false
     //if not create one and set isliked to true
-    //ADDED: notify video owner on like only (not on unlike)
+    // notify video owner on like only (not on unlike)
     //return success
 
     const { videoId } = req.params;
