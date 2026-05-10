@@ -6,6 +6,8 @@ import hpp from "hpp";
 
 const app = express();
 
+app.set("trust proxy", 1);
+
 app.use(
     cors({
         origin: process.env.CORS_ORIGIN,
