@@ -19,6 +19,7 @@
         "prettier": "^3.8.1"
     },
     "dependencies": {
+        "@getbrevo/brevo": "^5.0.4",
         "@google/genai": "^1.48.0",
         "assemblyai": "^4.29.0",
         "bcrypt": "^6.0.0",
@@ -35,7 +36,6 @@
         "mongoose": "^9.1.5",
         "mongoose-aggregate-paginate-v2": "^1.1.4",
         "multer": "^2.0.2",
-        "nodemailer": "^8.0.7",
         "uuid": "^13.0.0"
     }
 }
