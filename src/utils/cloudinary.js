@@ -7,10 +7,16 @@ const uploadOnCloudinary = async (localFilePath) => {
         // upload the file on cloudinary
         const response = await cloudinary.uploader.upload(localFilePath, {
             resource_type: "auto",
+            secure: true, // force https on the returned URL
         });
         //file has been uploaded successfully
         // console.log("file is uploaded on cloudinary", response.url);
         fs.unlinkSync(localFilePath);
+
+        // Overwrite url with secure_url so every controller that reads
+        // response.url gets https:// regardless of Cloudinary account settings
+        response.url = response.secure_url;
+
         return response;
     } catch (error) {
         console.error("[cloudinary] Upload failed:", error.message);
