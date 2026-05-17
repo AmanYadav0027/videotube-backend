@@ -13,7 +13,6 @@ const createTransporter = () =>
 
 export const sendVerificationEmail = async (email, token) => {
     const verifyURL = `${process.env.CLIENT_URL}/verify-email?token=${token}`;
-
     const transporter = createTransporter();
 
     await transporter.sendMail({

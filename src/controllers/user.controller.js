@@ -126,7 +126,11 @@ const registerUser = asyncHandler(async (req, res) => {
         isVerified: false,
     });
 
-    await sendVerificationEmail(email, verificationToken);
+    try {
+        await sendVerificationEmail(email, verificationToken);
+    } catch (emailError) {
+        console.error("EMAIL SEND FAILED:", emailError.message);
+    }
 
     const createdUser = await User.findById(user._id).select(
         "-password -refreshToken"
